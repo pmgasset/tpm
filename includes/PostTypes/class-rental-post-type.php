@@ -24,7 +24,10 @@ class RentalPostType extends BasePostType {
 
 
 
+
+
                 'labels'       => self::get_labels(),
+
 
 
 

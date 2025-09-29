@@ -11,6 +11,7 @@ $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 20
 $content = isset( $content ) ? (string) $content : '';
 
 
+
 $content = isset( $content ) ? (string) $content : '';
 
 $content   = $rental->post_content;
@@ -45,6 +46,7 @@ if ( class_exists( '\\VRSP\\Blocks\\ListingBlock' ) && \VRSP\Blocks\ListingBlock
 }
 
 $content = wp_kses_post( $content );
+
 
 
 ?>

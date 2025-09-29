@@ -13,11 +13,16 @@ use WP_Post;
  * Listing block renderer and shortcode.
  */
 class ListingBlock {
+
+    private static $is_rendering = false;
+
+
     private static $render_depth = 0;
 
 
 
     private static $is_rendering = false;
+
 
 
     private $settings;
@@ -89,6 +94,7 @@ class ListingBlock {
             return '';
         }
 
+
         try {
             $rental = $this->get_primary_rental();
 
@@ -98,6 +104,19 @@ class ListingBlock {
                     \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
                 );
             }
+
+
+
+        try {
+            $rental = $this->get_primary_rental();
+
+            if ( ! $rental ) {
+                return sprintf(
+                    '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
+                    \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
+                );
+            }
+
 
 
             wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
@@ -112,6 +131,9 @@ class ListingBlock {
                     'rules'    => $this->rules->get_rules(),
                 ]
             );
+
+
+
 
 
         if ( self::$is_rendering ) {
@@ -144,6 +166,7 @@ class ListingBlock {
             );
 
 
+
             return $this->templates->render( 'listing/listing.php', [
                 'content'       => $this->prepare_rental_content( $rental ),
                 'block_content' => $content,
@@ -152,6 +175,9 @@ class ListingBlock {
             ] );
         } finally {
             self::leave_render();
+
+        }
+
 
 
 
@@ -163,13 +189,17 @@ class ListingBlock {
             self::$is_rendering = false;
 
           }
+
     }
 
     public function shortcode( $atts ): string {
         if ( self::is_rendering() ) {
 
 
+
+
         if ( self::$is_rendering ) {
+
 
             return '';
         }
@@ -194,16 +224,31 @@ class ListingBlock {
     }
 
     private static function enter_render(): bool {
+
+        if ( self::$is_rendering ) {
+            return false;
+        }
+
+        self::$is_rendering = true;
+
         if ( self::$render_depth > 0 ) {
             return false;
         }
 
         self::$render_depth++;
 
+
         return true;
     }
 
     private static function leave_render(): void {
+
+        self::$is_rendering = false;
+    }
+
+    public static function is_rendering(): bool {
+        return self::$is_rendering;
+
         if ( self::$render_depth > 0 ) {
             self::$render_depth--;
         }
@@ -211,6 +256,7 @@ class ListingBlock {
 
     public static function is_rendering(): bool {
         return self::$render_depth > 0;
+
     }
 
     private function prepare_rental_content( WP_Post $rental ): string {
