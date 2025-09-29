@@ -1,5 +1,6 @@
 <?php
 /** @var WP_Post $rental */
+/** @var string $content Sanitized rental content */
 if ( ! isset( $rental ) || ! $rental instanceof WP_Post ) {
     return;
 }
@@ -7,6 +8,7 @@ if ( ! isset( $rental ) || ! $rental instanceof WP_Post ) {
 $gallery   = get_attached_media( 'image', $rental->ID );
 $options   = get_option( \VRSP\Settings::OPTION_KEY, [] );
 $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 200;
+$content = isset( $content ) ? (string) $content : '';
 ?>
 <div class="vrsp-listing">
     <div class="vrsp-hero">
@@ -24,7 +26,7 @@ $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 20
         <div class="vrsp-grid two">
             <div class="vrsp-card">
                 <h2><?php echo esc_html( get_the_title( $rental ) ); ?></h2>
-                <div class="vrsp-description"><?php echo wp_kses_post( apply_filters( 'the_content', $rental->post_content ) ); ?></div>
+                <div class="vrsp-description"><?php echo $content; ?></div>
             </div>
             <div class="vrsp-card vrsp-calendar">
                 <h3><?php esc_html_e( 'Availability', 'vr-single-property' ); ?></h3>
