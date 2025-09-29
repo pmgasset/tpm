@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring
+      - name: PHP Lint
+        run: |
+          find . -type f -name "*.php" -not -path "./vendor/*" -print0 | xargs -0 -n1 -P4 php -l
+      - name: PHPCS
+        run: |
+          composer global require squizlabs/php_codesniffer wp-coding-standards/wpcs
+          ~/.composer/vendor/bin/phpcs --config-set installed_paths ~/.composer/vendor/wp-coding-standards/wpcs
+          ~/.composer/vendor/bin/phpcs --ignore=vendor --standard=WordPress vr-single-property.php includes admin templates blocks theme-seed
+      - name: JavaScript Lint
+        run: |
+          npx eslint --no-eslintrc --env browser --parser-options ecmaVersion:5 --rule "no-undef: off" blocks/listing/editor.js public/js/listing.js
+  package:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip
+        run: |
+          zip -r vr-single-property.zip . -x '*.git*'
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vr-single-property
+          path: vr-single-property.zip
