@@ -71,8 +71,8 @@ return $this->settings->get_defaults();
 }
 
 $sanitized = $this->settings->sanitize( (array) $value );
-update_option( Settings::OPTION_KEY, $sanitized );
-$this->settings->refresh();
+$this->settings->prime_cache( $sanitized );
+
 return $sanitized;
 }
 

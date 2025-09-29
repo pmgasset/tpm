@@ -84,9 +84,16 @@ return $this->settings[ $key ] ?? $default;
 /**
  * Update settings cache.
  */
-public function refresh(): void {
-$this->settings = wp_parse_args( get_option( self::OPTION_KEY, [] ), $this->get_defaults() );
-}
+    public function refresh(): void {
+        $this->settings = wp_parse_args( get_option( self::OPTION_KEY, [] ), $this->get_defaults() );
+    }
+
+    /**
+     * Prime the settings cache with sanitized data.
+     */
+    public function prime_cache( array $settings ): void {
+        $this->settings = wp_parse_args( $settings, $this->get_defaults() );
+    }
 
 /**
  * Persist settings from admin.
