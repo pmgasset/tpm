@@ -13,12 +13,14 @@ use WP_Post;
  * Listing block renderer and shortcode.
  */
 class ListingBlock {
-private $settings;
-private $pricing;
-private $stripe;
-private $rules;
-private $logger;
-private $templates;
+    private static $is_rendering = false;
+
+    private $settings;
+    private $pricing;
+    private $stripe;
+    private $rules;
+    private $logger;
+    private $templates;
 
     public function __construct( Settings $settings, PricingEngine $pricing, StripeGateway $stripe, BusinessRules $rules, Logger $logger, TemplateLoader $templates ) {
         $this->settings  = $settings;
@@ -73,37 +75,55 @@ private $templates;
         register_block_type( 'vrsp/listing', $args );
     }
 
-    public function render_block( array $attributes, string $content ): string {
-        $rental = $this->get_primary_rental();
+    public static function is_rendering(): bool {
+        return (bool) self::$is_rendering;
+    }
 
-        if ( ! $rental ) {
-            return sprintf(
-                '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
-                \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
-            );
+    public function render_block( array $attributes, string $content ): string {
+        if ( self::$is_rendering ) {
+            return '';
         }
 
-        wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
-        wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], VRSP_VERSION, true );
-        wp_localize_script(
-            'vrsp-listing',
-            'vrspListing',
-[
-'api'      => esc_url_raw( rest_url( 'vr/v1' ) ),
-'currency' => $this->settings->get( 'currency', 'USD' ),
-'stripe'   => $this->stripe->get_client_settings(),
-'rules'    => $this->rules->get_rules(),
-]
-);
+        self::$is_rendering = true;
 
-        return $this->templates->render( 'listing/listing.php', [
-            'content' => $content,
-            'attrs'   => $attributes,
-            'rental'  => $rental,
-        ] );
+        try {
+            $rental = $this->get_primary_rental();
+
+            if ( ! $rental ) {
+                return sprintf(
+                    '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
+                    \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
+                );
+            }
+
+            wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
+            wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], VRSP_VERSION, true );
+            wp_localize_script(
+                'vrsp-listing',
+                'vrspListing',
+                [
+                    'api'      => esc_url_raw( rest_url( 'vr/v1' ) ),
+                    'currency' => $this->settings->get( 'currency', 'USD' ),
+                    'stripe'   => $this->stripe->get_client_settings(),
+                    'rules'    => $this->rules->get_rules(),
+                ]
+            );
+
+            return $this->templates->render( 'listing/listing.php', [
+                'content' => $content,
+                'attrs'   => $attributes,
+                'rental'  => $rental,
+            ] );
+        } finally {
+            self::$is_rendering = false;
+        }
     }
 
     public function shortcode( $atts ): string {
+        if ( self::$is_rendering ) {
+            return '';
+        }
+
         return $this->render_block( [], '' );
     }
 

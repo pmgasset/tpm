@@ -59,6 +59,9 @@ return self::$instance;
  */
     public static function activate(): void {
         self::get_instance();
+        if ( function_exists( 'load_plugin_textdomain' ) ) {
+            load_plugin_textdomain( 'vr-single-property', false, dirname( plugin_basename( VRSP_PLUGIN_FILE ) ) . '/languages/' );
+        }
         RentalPostType::register_post_type();
         BasePostType::flush_rewrite();
         CronManager::activate();
