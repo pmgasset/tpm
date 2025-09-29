@@ -20,6 +20,7 @@ private $rules;
 private $stripe;
 private $ical;
 private $sms;
+private $views_dir;
 
 public function __construct( Settings $settings, Logger $logger, PricingEngine $pricing, BusinessRules $rules, StripeGateway $stripe, IcalSync $ical, SmsGateway $sms ) {
 $this->settings = $settings;
@@ -29,6 +30,7 @@ $this->rules    = $rules;
 $this->stripe   = $stripe;
 $this->ical     = $ical;
 $this->sms      = $sms;
+$this->views_dir = rtrim( VRSP_PLUGIN_DIR, '/\\' ) . '/admin/views/';
 
 add_action( 'admin_menu', [ $this, 'register_menu' ] );
 add_action( 'admin_init', [ $this, 'register_settings' ] );
@@ -75,12 +77,16 @@ wp_enqueue_style( 'vrsp-admin', VRSP_PLUGIN_URL . 'admin/css/admin.css', [], VRS
 }
 
 public function render_dashboard(): void {
-include __DIR__ . '/views/dashboard.php';
+$this->render_view( 'dashboard' );
 }
 
 public function render_settings_page(): void {
-$settings = $this->settings;
-include __DIR__ . '/views/settings.php';
+$this->render_view(
+ 'settings',
+ [
+ 'settings' => $this->settings,
+ ]
+);
 }
 
 public function render_bookings_page(): void {
@@ -93,11 +99,48 @@ $bookings = get_posts(
 'order'          => 'DESC',
 ]
 );
-include __DIR__ . '/views/bookings.php';
+$this->render_view(
+ 'bookings',
+ [
+ 'bookings' => $bookings,
+ ]
+);
 }
 
 public function render_logs_page(): void {
-$logs = $this->logger->get_logs();
-include __DIR__ . '/views/logs.php';
+$this->render_view(
+ 'logs',
+ [
+ 'logs' => $this->logger->get_logs(),
+ ]
+);
+}
+
+private function render_view( string $view, array $context = [] ): void {
+$file = $this->views_dir . $view . '.php';
+
+if ( ! file_exists( $file ) ) {
+$this->logger->error(
+ sprintf(
+ 'Admin view missing: %s',
+ $view
+ ),
+ [
+ 'file' => $file,
+ ]
+);
+
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+trigger_error( sprintf( 'VR Single Property admin view missing: %s', $file ), E_USER_WARNING );
+}
+
+return;
+}
+
+if ( ! empty( $context ) ) {
+extract( $context, EXTR_SKIP );
+}
+
+include $file;
 }
 }
