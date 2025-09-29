@@ -89,6 +89,7 @@ LogPostType::register();
 $this->boot_modules();
 
 add_action( 'init', [ $this, 'load_textdomain' ] );
+add_action( 'init', [ $this->settings, 'refresh' ], 11 );
 }
 
 /**

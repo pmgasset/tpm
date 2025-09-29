@@ -1,23 +1,28 @@
 <?php
 namespace VRSP\PostTypes;
 
+use function __;
+use function did_action;
+
 /**
  * Rental post type.
  */
 class RentalPostType extends BasePostType {
-public static function get_key(): string {
-return 'vrsp_rental';
-}
+    public static function get_key(): string {
+        return 'vrsp_rental';
+    }
 
-public static function register(): void {
-add_action( 'init', [ static::class, 'register_post_type' ] );
-}
+    public static function register(): void {
+        add_action( 'init', [ static::class, 'register_post_type' ] );
+    }
 
     public static function register_post_type(): void {
         register_post_type(
             self::get_key(),
             [
+                'labels'              => self::get_labels(),
                 'labels'       => self::get_labels(),
+
                 'public'              => true,
                 'show_ui'             => true,
                 'show_in_menu'        => 'vrsp-dashboard',

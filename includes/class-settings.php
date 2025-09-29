@@ -1,6 +1,9 @@
 <?php
 namespace VRSP;
 
+use function __;
+use function did_action;
+
 /**
  * Settings repository.
  */
@@ -22,7 +25,14 @@ $this->settings = wp_parse_args( get_option( self::OPTION_KEY, [] ), $this->get_
  * Default settings.
  */
 public function get_defaults(): array {
-return [
+        $translate   = did_action( 'init' );
+        $house_rules = 'No smoking. No pets. Quiet hours after 10 PM.';
+
+        if ( $translate && function_exists( '__' ) ) {
+            $house_rules = __( 'No smoking. No pets. Quiet hours after 10 PM.', 'vr-single-property' );
+        }
+
+        return [
 'currency'                => 'USD',
 'base_rate'               => 200.0,
 'tax_rate'                => 0.12,
@@ -53,12 +63,12 @@ return [
 'uplift_cap'              => 0.15,
 'coupons'                 => [],
 'business_rules'          => [
-'checkin_time'       => '16:00',
-'checkout_time'      => '11:00',
-'deposit_threshold'  => 7,
-'deposit_percent'    => 0.5,
-'cancellation_days'  => 7,
-'house_rules'        => __( 'No smoking. No pets. Quiet hours after 10 PM.', 'vr-single-property' ),
+    'checkin_time'       => '16:00',
+    'checkout_time'      => '11:00',
+    'deposit_threshold'  => 7,
+    'deposit_percent'    => 0.5,
+    'cancellation_days'  => 7,
+    'house_rules'        => $house_rules,
 ],
 'email_templates'         => [],
 ];
