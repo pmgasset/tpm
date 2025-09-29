@@ -1,5 +1,6 @@
 <?php
 /** @var WP_Post $rental */
+/** @var string $content Sanitized rental content */
 if ( ! isset( $rental ) || ! $rental instanceof WP_Post ) {
     return;
 }
@@ -7,6 +8,9 @@ if ( ! isset( $rental ) || ! $rental instanceof WP_Post ) {
 $gallery   = get_attached_media( 'image', $rental->ID );
 $options   = get_option( \VRSP\Settings::OPTION_KEY, [] );
 $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 200;
+
+$content = isset( $content ) ? (string) $content : '';
+
 $content   = $rental->post_content;
 
 
@@ -39,6 +43,7 @@ if ( class_exists( '\\VRSP\\Blocks\\ListingBlock' ) && \VRSP\Blocks\ListingBlock
 }
 
 $content = wp_kses_post( $content );
+
 ?>
 <div class="vrsp-listing">
     <div class="vrsp-hero">

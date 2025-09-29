@@ -13,6 +13,8 @@ use WP_Post;
  * Listing block renderer and shortcode.
  */
 class ListingBlock {
+    private static $render_depth = 0;
+
     private static $is_rendering = false;
 
     private $settings;
@@ -80,6 +82,20 @@ class ListingBlock {
     }
 
     public function render_block( array $attributes, string $content ): string {
+        if ( ! self::enter_render() ) {
+            return '';
+        }
+
+        try {
+            $rental = $this->get_primary_rental();
+
+            if ( ! $rental ) {
+                return sprintf(
+                    '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
+                    \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
+                );
+            }
+
         if ( self::$is_rendering ) {
             return '';
         }
@@ -110,17 +126,29 @@ class ListingBlock {
             );
 
             return $this->templates->render( 'listing/listing.php', [
+                'content'       => $this->prepare_rental_content( $rental ),
+                'block_content' => $content,
+                'attrs'         => $attributes,
+                'rental'        => $rental,
+            ] );
+        } finally {
+            self::leave_render();
+
                 'content' => $content,
                 'attrs'   => $attributes,
                 'rental'  => $rental,
             ] );
         } finally {
             self::$is_rendering = false;
+
         }
     }
 
     public function shortcode( $atts ): string {
+        if ( self::is_rendering() ) {
+
         if ( self::$is_rendering ) {
+
             return '';
         }
 
@@ -141,5 +169,57 @@ class ListingBlock {
         $rental = get_post( $rental_id );
 
         return $rental instanceof WP_Post ? $rental : null;
+    }
+
+    private static function enter_render(): bool {
+        if ( self::$render_depth > 0 ) {
+            return false;
+        }
+
+        self::$render_depth++;
+
+        return true;
+    }
+
+    private static function leave_render(): void {
+        if ( self::$render_depth > 0 ) {
+            self::$render_depth--;
+        }
+    }
+
+    public static function is_rendering(): bool {
+        return self::$render_depth > 0;
+    }
+
+    private function prepare_rental_content( WP_Post $rental ): string {
+        $content = (string) $rental->post_content;
+
+        $patterns = [
+            '/\[vrsp_listing(?:\s+[^\]]*)?\](?:.*?\[\/vrsp_listing\])?/is',
+            '/<!--\s+wp:vrsp\/listing\b.*?-->\s*<!--\s+\/wp:vrsp\/listing\s+-->/is',
+            '/<!--\s+\/?wp:vrsp\/listing\b[^>]*-->/i',
+        ];
+
+        foreach ( $patterns as $pattern ) {
+            $stripped = preg_replace( $pattern, '', $content );
+
+            if ( null !== $stripped ) {
+                $content = $stripped;
+            }
+        }
+
+        $content = trim( $content );
+
+        if ( '' === $content ) {
+            return '';
+        }
+
+        $filtered = \apply_filters( 'the_content', $content );
+
+        if ( is_string( $filtered ) ) {
+            $content = $filtered;
+        }
+
+        return \wp_kses_post( $content );
     }
 }
