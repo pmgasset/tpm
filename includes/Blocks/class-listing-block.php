@@ -15,6 +15,8 @@ use WP_Post;
 class ListingBlock {
     private static $render_depth = 0;
 
+    private static $is_rendering = false;
+
     private $settings;
     private $pricing;
     private $stripe;
@@ -75,10 +77,30 @@ class ListingBlock {
         register_block_type( 'vrsp/listing', $args );
     }
 
+    public static function is_rendering(): bool {
+        return (bool) self::$is_rendering;
+    }
+
     public function render_block( array $attributes, string $content ): string {
         if ( ! self::enter_render() ) {
             return '';
         }
+
+        try {
+            $rental = $this->get_primary_rental();
+
+            if ( ! $rental ) {
+                return sprintf(
+                    '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
+                    \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
+                );
+            }
+
+        if ( self::$is_rendering ) {
+            return '';
+        }
+
+        self::$is_rendering = true;
 
         try {
             $rental = $this->get_primary_rental();
@@ -111,11 +133,22 @@ class ListingBlock {
             ] );
         } finally {
             self::leave_render();
+
+                'content' => $content,
+                'attrs'   => $attributes,
+                'rental'  => $rental,
+            ] );
+        } finally {
+            self::$is_rendering = false;
+
         }
     }
 
     public function shortcode( $atts ): string {
         if ( self::is_rendering() ) {
+
+        if ( self::$is_rendering ) {
+
             return '';
         }
 
