@@ -63,8 +63,6 @@ require_once $file;
 add_action(
 'plugins_loaded',
 static function () {
-load_plugin_textdomain( 'vr-single-property', false, dirname( plugin_basename( VRSP_PLUGIN_FILE ) ) . '/languages/' );
-
 if ( class_exists( '\\VRSP\\Plugin' ) ) {
 \VRSP\Plugin::get_instance();
 }
