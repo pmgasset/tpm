@@ -30,6 +30,8 @@ define( 'VRSP_PLUGIN_FILE', __FILE__ );
 define( 'VRSP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VRSP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
+require_once VRSP_PLUGIN_DIR . 'includes/helpers-rental.php';
+
 spl_autoload_register(
 static function ( $class ) {
 if ( 0 !== strpos( $class, 'VRSP\\' ) ) {

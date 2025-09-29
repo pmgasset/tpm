@@ -1,15 +1,27 @@
 <?php
 if ( ! current_user_can( 'manage_options' ) ) {
-return;
+    return;
 }
+
+$rental_id = function_exists( 'vrsp_get_primary_rental_id' ) ? vrsp_get_primary_rental_id() : 0;
+$add_url   = admin_url( 'post-new.php?post_type=vrsp_rental' );
+$edit_url  = $rental_id ? get_edit_post_link( $rental_id, 'display' ) : '';
 ?>
 <div class="wrap vrsp-admin">
-<h1><?php esc_html_e( 'VR Single Property Dashboard', 'vr-single-property' ); ?></h1>
-<p><?php esc_html_e( 'Monitor bookings, revenue, and operational automations.', 'vr-single-property' ); ?></p>
+    <h1><?php esc_html_e( 'VR Single Property Dashboard', 'vr-single-property' ); ?></h1>
+    <p><?php esc_html_e( 'Monitor bookings, revenue, and operational automations.', 'vr-single-property' ); ?></p>
 
-<div class="vrsp-cards">
-<div class="vrsp-card">
-<h2><?php esc_html_e( 'Upcoming Arrivals', 'vr-single-property' ); ?></h2>
+    <div class="vrsp-dashboard-cta" style="margin:16px 0;">
+        <?php if ( $rental_id && $edit_url ) : ?>
+            <a class="button button-primary" href="<?php echo esc_url( $edit_url ); ?>"><?php esc_html_e( 'Edit Rental', 'vr-single-property' ); ?></a>
+        <?php else : ?>
+            <a class="button button-primary" href="<?php echo esc_url( $add_url ); ?>"><?php esc_html_e( 'Add Rental', 'vr-single-property' ); ?></a>
+        <?php endif; ?>
+    </div>
+
+    <div class="vrsp-cards">
+        <div class="vrsp-card">
+            <h2><?php esc_html_e( 'Upcoming Arrivals', 'vr-single-property' ); ?></h2>
 <ul>
 <?php
 $upcoming = get_posts(
