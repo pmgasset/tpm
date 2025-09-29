@@ -67,13 +67,86 @@ echo $this->build_calendar();
 exit;
 }
 
-private function build_calendar(): string {
-$events   = $this->get_booking_events();
-$output[] = 'BEGIN:VCALENDAR';
-$output[] = 'VERSION:2.0';
-$output[] = 'PRODID:-//VR Single Property//EN';
+    public function get_blocked_ranges(): array {
+        $blocked = [];
 
-foreach ( $events as $event ) {
+        $timezone = wp_timezone();
+
+        foreach ( $this->collect_events() as $event ) {
+            if ( empty( $event['start'] ) || empty( $event['end'] ) ) {
+                continue;
+            }
+
+            $blocked[] = [
+                'start'  => wp_date( 'Y-m-d', (int) $event['start'], $timezone ),
+                'end'    => wp_date( 'Y-m-d', (int) $event['end'], $timezone ),
+                'source' => $event['source'] ?? 'internal',
+            ];
+        }
+
+        return $blocked;
+    }
+
+    public function is_range_available( DateTimeImmutable $arrival, DateTimeImmutable $departure ): bool {
+        if ( $arrival >= $departure ) {
+            return false;
+        }
+
+        foreach ( $this->collect_events() as $event ) {
+            $start = isset( $event['start'] ) ? (int) $event['start'] : 0;
+            $end   = isset( $event['end'] ) ? (int) $event['end'] : 0;
+
+            if ( ! $start || ! $end ) {
+                continue;
+            }
+
+            // DTEND values from channels represent the checkout date and are non-inclusive.
+            $event_start = ( new DateTimeImmutable( '@' . $start ) )->setTimezone( wp_timezone() );
+            $event_end   = ( new DateTimeImmutable( '@' . $end ) )->setTimezone( wp_timezone() );
+
+            if ( $arrival < $event_end && $departure > $event_start ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function get_availability_window( DateTimeImmutable $from, DateTimeImmutable $to ): array {
+        $window = [];
+        $events = $this->collect_events();
+
+        $timezone = wp_timezone();
+
+        foreach ( $events as $event ) {
+            if ( empty( $event['start'] ) || empty( $event['end'] ) ) {
+                continue;
+            }
+
+            $event_start = (int) $event['start'];
+            $event_end   = (int) $event['end'];
+
+            if ( $event_end < $from->getTimestamp() || $event_start > $to->getTimestamp() ) {
+                continue;
+            }
+
+            $window[] = [
+                'start'  => wp_date( 'Y-m-d', $event_start, $timezone ),
+                'end'    => wp_date( 'Y-m-d', $event_end, $timezone ),
+                'source' => $event['source'] ?? 'internal',
+            ];
+        }
+
+        return $window;
+    }
+
+    private function build_calendar(): string {
+        $events   = $this->collect_events();
+        $output[] = 'BEGIN:VCALENDAR';
+        $output[] = 'VERSION:2.0';
+        $output[] = 'PRODID:-//VR Single Property//EN';
+
+        foreach ( $events as $event ) {
 $output[] = 'BEGIN:VEVENT';
 $output[] = 'UID:' . $event['uid'];
 $output[] = 'DTSTAMP:' . gmdate( 'Ymd\THis\Z', $event['created'] );
@@ -89,16 +162,16 @@ $output[] = 'END:VCALENDAR';
 return implode( "\r\n", $output );
 }
 
-private function get_booking_events(): array {
-$bookings = get_posts(
-[
-'post_type'      => 'vrsp_booking',
-'post_status'    => [ 'publish', 'draft' ],
-'posts_per_page' => 200,
-]
-);
+    private function collect_events(): array {
+        $bookings = get_posts(
+            [
+                'post_type'      => 'vrsp_booking',
+                'post_status'    => [ 'publish', 'draft', 'pending' ],
+                'posts_per_page' => 200,
+            ]
+        );
 
-$events = [];
+        $events = [];
 
 foreach ( $bookings as $booking ) {
 $arrival   = strtotime( get_post_meta( $booking->ID, '_vrsp_arrival', true ) );
@@ -107,21 +180,31 @@ if ( ! $arrival || ! $departure ) {
 continue;
 }
 
-$events[] = [
-'uid'         => $booking->ID . '@' . wp_parse_url( home_url(), PHP_URL_HOST ),
-'created'     => strtotime( $booking->post_date_gmt ),
-'changed'     => strtotime( $booking->post_modified_gmt ),
-'start'       => $arrival,
-'end'         => $departure,
-'summary'     => get_the_title( $booking ),
-'description' => sprintf( 'Guests: %s', get_post_meta( $booking->ID, '_vrsp_guests', true ) ),
-];
-}
+            $events[] = [
+                'uid'         => $booking->ID . '@' . wp_parse_url( home_url(), PHP_URL_HOST ),
+                'created'     => strtotime( $booking->post_date_gmt ),
+                'changed'     => strtotime( $booking->post_modified_gmt ),
+                'start'       => $arrival,
+                'end'         => $departure,
+                'summary'     => get_the_title( $booking ),
+                'description' => sprintf( 'Guests: %s', get_post_meta( $booking->ID, '_vrsp_guests', true ) ),
+                'source'      => 'direct',
+            ];
+        }
 
-$imports = (array) get_option( 'vrsp_imported_ical_events', [] );
+        $imports = (array) get_option( 'vrsp_imported_ical_events', [] );
 
-return array_merge( $events, $imports );
-}
+        foreach ( $imports as $import ) {
+            if ( empty( $import['start'] ) || empty( $import['end'] ) ) {
+                continue;
+            }
+
+            $import['source'] = $import['source'] ?? 'channel';
+            $events[]         = $import;
+        }
+
+        return $events;
+    }
 
 private function parse_ical( string $content ): array {
 $events = [];

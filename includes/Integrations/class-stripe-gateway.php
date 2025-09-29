@@ -63,8 +63,8 @@ return [ 'error' => __( 'Stripe is not configured.', 'vr-single-property' ) ];
 
 $booking_id = $this->create_booking_post( $booking, $quote );
 
-$amount = $quote['deposit'];
-$description = sprintf( __( 'Deposit for stay %s - %s', 'vr-single-property' ), $booking['arrival'], $booking['departure'] );
+        $amount = $quote['deposit'];
+        $description = sprintf( __( 'Deposit for stay %s - %s', 'vr-single-property' ), $booking['arrival'], $booking['departure'] );
 
 $payload = [
 'mode'                 => 'payment',
@@ -202,43 +202,45 @@ $this->logger->error( 'Balance payment failed.', $response );
 }
 }
 
-private function handle_session_completed( array $session ): void {
-$session_id = $session['id'] ?? '';
-if ( ! $session_id ) {
-return;
-}
+    private function handle_session_completed( array $session ): void {
+        $session_id = $session['id'] ?? '';
+        if ( ! $session_id ) {
+            return;
+        }
 
-$booking = $this->get_booking_by_meta( '_vrsp_stripe_session_id', $session_id );
-if ( ! $booking ) {
-return;
-}
+        $booking = $this->get_booking_by_meta( '_vrsp_stripe_session_id', $session_id );
+        if ( ! $booking ) {
+            return;
+        }
 
-update_post_meta( $booking->ID, '_vrsp_deposit_paid', 1 );
-if ( isset( $session['customer'] ) ) {
-update_post_meta( $booking->ID, '_vrsp_stripe_customer', sanitize_text_field( $session['customer'] ) );
-}
+        update_post_meta( $booking->ID, '_vrsp_deposit_paid', 1 );
+        if ( isset( $session['customer'] ) ) {
+            update_post_meta( $booking->ID, '_vrsp_stripe_customer', sanitize_text_field( $session['customer'] ) );
+        }
 
-if ( isset( $session['payment_intent'] ) ) {
-update_post_meta( $booking->ID, '_vrsp_stripe_payment_intent', sanitize_text_field( $session['payment_intent'] ) );
-}
+        if ( isset( $session['payment_intent'] ) ) {
+            update_post_meta( $booking->ID, '_vrsp_stripe_payment_intent', sanitize_text_field( $session['payment_intent'] ) );
+        }
 
-if ( isset( $session['setup_intent'] ) ) {
-$setup = $this->request( 'GET', '/v1/setup_intents/' . $session['setup_intent'] );
-if ( isset( $setup['payment_method'] ) ) {
-update_post_meta( $booking->ID, '_vrsp_payment_method', sanitize_text_field( $setup['payment_method'] ) );
-}
-}
+        if ( isset( $session['setup_intent'] ) ) {
+            $setup = $this->request( 'GET', '/v1/setup_intents/' . $session['setup_intent'] );
+            if ( isset( $setup['payment_method'] ) ) {
+                update_post_meta( $booking->ID, '_vrsp_payment_method', sanitize_text_field( $setup['payment_method'] ) );
+            }
+        }
 
-wp_update_post(
-[
-'ID'          => $booking->ID,
-'post_status' => 'publish',
-]
-);
+        update_post_meta( $booking->ID, '_vrsp_admin_status', 'pending_admin' );
 
-$this->logger->info( 'Stripe checkout completed.', [ 'booking_id' => $booking->ID ] );
-do_action( 'vrsp_booking_confirmed', $booking->ID );
-}
+        wp_update_post(
+            [
+                'ID'          => $booking->ID,
+                'post_status' => 'pending',
+            ]
+        );
+
+        $this->logger->info( 'Stripe checkout completed.', [ 'booking_id' => $booking->ID ] );
+        do_action( 'vrsp_booking_pending_admin', $booking->ID );
+    }
 
 private function handle_payment_succeeded( array $intent ): void {
 $booking_id = $intent['metadata']['booking_id'] ?? 0;
@@ -260,29 +262,32 @@ $this->logger->error( 'Stripe payment failed.', [ 'booking_id' => $booking_id, '
 }
 }
 
-private function create_booking_post( array $booking, array $quote ): int {
-$post_id = wp_insert_post(
-[
-'post_type'   => 'vrsp_booking',
-'post_title'  => sprintf( '%s %s (%s)', $booking['first_name'], $booking['last_name'], $booking['arrival'] ),
-'post_status' => 'draft',
-]
-);
+    private function create_booking_post( array $booking, array $quote ): int {
+        $post_id = wp_insert_post(
+            [
+                'post_type'   => 'vrsp_booking',
+                'post_title'  => sprintf( '%s %s (%s)', $booking['first_name'], $booking['last_name'], $booking['arrival'] ),
+                'post_status' => 'draft',
+                'post_author' => isset( $booking['user_id'] ) ? (int) $booking['user_id'] : 0,
+            ]
+        );
 
-update_post_meta( $post_id, '_vrsp_arrival', $booking['arrival'] );
-update_post_meta( $post_id, '_vrsp_departure', $booking['departure'] );
-update_post_meta( $post_id, '_vrsp_guests', (int) $booking['guests'] );
-update_post_meta( $post_id, '_vrsp_email', sanitize_email( $booking['email'] ) );
-update_post_meta( $post_id, '_vrsp_phone', sanitize_text_field( $booking['phone'] ) );
-update_post_meta( $post_id, '_vrsp_checkin_time', $this->settings->get_business_rules()['checkin_time'] ?? '16:00' );
-update_post_meta( $post_id, '_vrsp_checkout_time', $this->settings->get_business_rules()['checkout_time'] ?? '11:00' );
-update_post_meta( $post_id, '_vrsp_quote', $quote );
-update_post_meta( $post_id, '_vrsp_coupon_code', $booking['coupon'] ?? '' );
+        update_post_meta( $post_id, '_vrsp_arrival', $booking['arrival'] );
+        update_post_meta( $post_id, '_vrsp_departure', $booking['departure'] );
+        update_post_meta( $post_id, '_vrsp_guests', (int) $booking['guests'] );
+        update_post_meta( $post_id, '_vrsp_email', sanitize_email( $booking['email'] ) );
+        update_post_meta( $post_id, '_vrsp_phone', sanitize_text_field( $booking['phone'] ) );
+        update_post_meta( $post_id, '_vrsp_checkin_time', $this->settings->get_business_rules()['checkin_time'] ?? '16:00' );
+        update_post_meta( $post_id, '_vrsp_checkout_time', $this->settings->get_business_rules()['checkout_time'] ?? '11:00' );
+        update_post_meta( $post_id, '_vrsp_quote', $quote );
+        update_post_meta( $post_id, '_vrsp_coupon_code', $booking['coupon'] ?? '' );
+        update_post_meta( $post_id, '_vrsp_user_id', isset( $booking['user_id'] ) ? (int) $booking['user_id'] : 0 );
+        update_post_meta( $post_id, '_vrsp_admin_status', 'initiated' );
 
-$this->pricing->persist_booking_meta( $post_id, $quote );
-$this->pricing->mark_uplift_applied();
+        $this->pricing->persist_booking_meta( $post_id, $quote );
+        $this->pricing->mark_uplift_applied();
 
-return $post_id;
+        return $post_id;
 }
 
 private function get_balance_due_timestamp( string $arrival ): int {

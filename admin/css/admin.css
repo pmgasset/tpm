@@ -26,3 +26,13 @@ text-transform: uppercase;
 .vrsp-admin .status-success { background: #d1fae5; color: #047857; }
 .vrsp-admin .status-warning { background: #fef3c7; color: #b45309; }
 .vrsp-admin .status-pending { background: #f3f4f6; color: #374151; }
+.vrsp-admin .status-info { background: #dbeafe; color: #1d4ed8; }
+
+.vrsp-admin .vrsp-bookings-table td,
+.vrsp-admin .vrsp-bookings-table th {
+    vertical-align: top;
+}
+
+.vrsp-admin .vrsp-bookings-table .vrsp-actions form {
+    margin: 0;
+}

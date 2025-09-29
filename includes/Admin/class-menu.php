@@ -32,10 +32,12 @@ $this->ical     = $ical;
 $this->sms      = $sms;
 $this->views_dir = rtrim( VRSP_PLUGIN_DIR, '/\\' ) . '/admin/views/';
 
-add_action( 'admin_menu', [ $this, 'register_menu' ] );
-add_action( 'admin_init', [ $this, 'register_settings' ] );
-add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-}
+        add_action( 'admin_menu', [ $this, 'register_menu' ] );
+        add_action( 'admin_init', [ $this, 'register_settings' ] );
+        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+        add_action( 'admin_post_vrsp_approve_booking', [ $this, 'handle_approve_booking' ] );
+        add_action( 'admin_notices', [ $this, 'maybe_notice' ] );
+    }
 
 public function register_menu(): void {
         add_menu_page(
@@ -97,23 +99,72 @@ $this->render_view(
 );
 }
 
-public function render_bookings_page(): void {
-$bookings = get_posts(
-[
-'post_type'      => 'vrsp_booking',
-'post_status'    => 'any',
+    public function render_bookings_page(): void {
+        $bookings = get_posts(
+            [
+                'post_type'      => 'vrsp_booking',
+                'post_status'    => 'any',
 'posts_per_page' => 50,
 'orderby'        => 'date',
 'order'          => 'DESC',
 ]
 );
-$this->render_view(
- 'bookings',
- [
- 'bookings' => $bookings,
- ]
-);
-}
+        $this->render_view(
+            'bookings',
+            [
+                'bookings' => $bookings,
+            ]
+        );
+    }
+
+    public function handle_approve_booking(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You do not have permission to approve bookings.', 'vr-single-property' ) );
+        }
+
+        $booking_id = isset( $_POST['booking_id'] ) ? absint( $_POST['booking_id'] ) : 0;
+
+        if ( ! $booking_id ) {
+            wp_safe_redirect( admin_url( 'admin.php?page=vrsp-bookings' ) );
+            exit;
+        }
+
+        check_admin_referer( 'vrsp-approve-booking_' . $booking_id );
+
+        wp_update_post(
+            [
+                'ID'          => $booking_id,
+                'post_status' => 'publish',
+            ]
+        );
+
+        update_post_meta( $booking_id, '_vrsp_admin_status', 'approved' );
+        update_post_meta( $booking_id, '_vrsp_approved_by', get_current_user_id() );
+        update_post_meta( $booking_id, '_vrsp_approved_at', current_time( 'mysql' ) );
+
+        do_action( 'vrsp_booking_confirmed', $booking_id );
+
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'page'        => 'vrsp-bookings',
+                    'vrsp_notice' => 'approved',
+                ],
+                admin_url( 'admin.php' )
+            )
+        );
+        exit;
+    }
+
+    public function maybe_notice(): void {
+        if ( empty( $_GET['vrsp_notice'] ) ) {
+            return;
+        }
+
+        if ( 'approved' === $_GET['vrsp_notice'] ) {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Reservation approved and sent to check-in.', 'vr-single-property' ) . '</p></div>';
+        }
+    }
 
 public function render_logs_page(): void {
 $this->render_view(
