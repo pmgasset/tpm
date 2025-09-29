@@ -13,12 +13,14 @@ use WP_Post;
  * Listing block renderer and shortcode.
  */
 class ListingBlock {
-private $settings;
-private $pricing;
-private $stripe;
-private $rules;
-private $logger;
-private $templates;
+    private static $is_rendering = false;
+
+    private $settings;
+    private $pricing;
+    private $stripe;
+    private $rules;
+    private $logger;
+    private $templates;
 
     public function __construct( Settings $settings, PricingEngine $pricing, StripeGateway $stripe, BusinessRules $rules, Logger $logger, TemplateLoader $templates ) {
         $this->settings  = $settings;
@@ -74,36 +76,49 @@ private $templates;
     }
 
     public function render_block( array $attributes, string $content ): string {
-        $rental = $this->get_primary_rental();
-
-        if ( ! $rental ) {
-            return sprintf(
-                '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
-                \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
-            );
+        if ( ! self::enter_render() ) {
+            return '';
         }
 
-        wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
-        wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], VRSP_VERSION, true );
-        wp_localize_script(
-            'vrsp-listing',
-            'vrspListing',
-[
-'api'      => esc_url_raw( rest_url( 'vr/v1' ) ),
-'currency' => $this->settings->get( 'currency', 'USD' ),
-'stripe'   => $this->stripe->get_client_settings(),
-'rules'    => $this->rules->get_rules(),
-]
-);
+        try {
+            $rental = $this->get_primary_rental();
 
-        return $this->templates->render( 'listing/listing.php', [
-            'content' => $content,
-            'attrs'   => $attributes,
-            'rental'  => $rental,
-        ] );
+            if ( ! $rental ) {
+                return sprintf(
+                    '<div class="vrsp-notice vrsp-notice--warning">%s</div>',
+                    \esc_html__( 'No rental has been published yet. Please add one under VR Rental → Rentals.', 'vr-single-property' )
+                );
+            }
+
+            wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
+            wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], VRSP_VERSION, true );
+            wp_localize_script(
+                'vrsp-listing',
+                'vrspListing',
+                [
+                    'api'      => esc_url_raw( rest_url( 'vr/v1' ) ),
+                    'currency' => $this->settings->get( 'currency', 'USD' ),
+                    'stripe'   => $this->stripe->get_client_settings(),
+                    'rules'    => $this->rules->get_rules(),
+                ]
+            );
+
+            return $this->templates->render( 'listing/listing.php', [
+                'content'       => $this->prepare_rental_content( $rental ),
+                'block_content' => $content,
+                'attrs'         => $attributes,
+                'rental'        => $rental,
+            ] );
+        } finally {
+            self::leave_render();
+        }
     }
 
     public function shortcode( $atts ): string {
+        if ( self::is_rendering() ) {
+            return '';
+        }
+
         return $this->render_block( [], '' );
     }
 
@@ -121,5 +136,55 @@ private $templates;
         $rental = get_post( $rental_id );
 
         return $rental instanceof WP_Post ? $rental : null;
+    }
+
+    private static function enter_render(): bool {
+        if ( self::$is_rendering ) {
+            return false;
+        }
+
+        self::$is_rendering = true;
+
+        return true;
+    }
+
+    private static function leave_render(): void {
+        self::$is_rendering = false;
+    }
+
+    public static function is_rendering(): bool {
+        return self::$is_rendering;
+    }
+
+    private function prepare_rental_content( WP_Post $rental ): string {
+        $content = (string) $rental->post_content;
+
+        $patterns = [
+            '/\[vrsp_listing(?:\s+[^\]]*)?\](?:.*?\[\/vrsp_listing\])?/is',
+            '/<!--\s+wp:vrsp\/listing\b.*?-->\s*<!--\s+\/wp:vrsp\/listing\s+-->/is',
+            '/<!--\s+\/?wp:vrsp\/listing\b[^>]*-->/i',
+        ];
+
+        foreach ( $patterns as $pattern ) {
+            $stripped = preg_replace( $pattern, '', $content );
+
+            if ( null !== $stripped ) {
+                $content = $stripped;
+            }
+        }
+
+        $content = trim( $content );
+
+        if ( '' === $content ) {
+            return '';
+        }
+
+        $filtered = \apply_filters( 'the_content', $content );
+
+        if ( is_string( $filtered ) ) {
+            $content = $filtered;
+        }
+
+        return \wp_kses_post( $content );
     }
 }

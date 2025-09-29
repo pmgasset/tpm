@@ -1,6 +1,9 @@
 <?php
 namespace VRSP\Utilities;
 
+use function __;
+use function did_action;
+
 use DateTimeImmutable;
 use VRSP\Integrations\CheckinApp;
 use VRSP\Integrations\IcalSync;
@@ -63,10 +66,16 @@ wp_clear_scheduled_hook( 'vrsp_housekeeping_notify' );
 }
 
 public function register_schedules( array $schedules ): array {
-$schedules['vrsp_quarter_hour'] = [
-'interval' => 15 * MINUTE_IN_SECONDS,
-'display'  => __( 'Every 15 Minutes', 'vr-single-property' ),
-];
+        $display = 'Every 15 Minutes';
+
+        if ( did_action( 'init' ) ) {
+            $display = __( 'Every 15 Minutes', 'vr-single-property' );
+        }
+
+        $schedules['vrsp_quarter_hour'] = [
+            'interval' => 15 * MINUTE_IN_SECONDS,
+            'display'  => $display,
+        ];
 
 return $schedules;
 }
