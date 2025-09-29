@@ -1,0 +1,106 @@
+.vrsp-listing {
+font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+background: #ffffff;
+border-radius: 16px;
+box-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
+overflow: hidden;
+margin: 2rem auto;
+max-width: 1200px;
+}
+
+.vrsp-hero {
+display: grid;
+grid-template-columns: 2fr 1fr;
+gap: 1rem;
+}
+
+.vrsp-hero img {
+width: 100%;
+height: 100%;
+object-fit: cover;
+}
+
+.vrsp-content {
+padding: 2rem;
+display: grid;
+gap: 2rem;
+}
+
+.vrsp-card {
+background: #f8fafc;
+border-radius: 12px;
+padding: 1.5rem;
+box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+}
+
+.vrsp-grid {
+display: grid;
+gap: 1.5rem;
+}
+
+.vrsp-grid.two {
+grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.vrsp-calendar {
+background: #0f172a;
+color: #e2e8f0;
+padding: 1.5rem;
+border-radius: 12px;
+}
+
+.vrsp-availability span.booked {
+display: inline-block;
+margin: 0.25rem;
+padding: 0.25rem 0.5rem;
+background: rgba(248, 113, 113, 0.15);
+color: #b91c1c;
+border-radius: 999px;
+font-size: 0.85rem;
+}
+
+.vrsp-form label {
+display: block;
+font-weight: 600;
+margin-bottom: 0.25rem;
+}
+
+.vrsp-form input,
+.vrsp-form select {
+width: 100%;
+border-radius: 8px;
+border: 1px solid #cbd5f5;
+padding: 0.5rem 0.75rem;
+margin-bottom: 1rem;
+}
+
+.vrsp-form button {
+background: linear-gradient(135deg, #2563eb, #1d4ed8);
+color: #fff;
+border: none;
+padding: 0.75rem 1.5rem;
+border-radius: 999px;
+font-weight: 600;
+cursor: pointer;
+transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vrsp-form button:hover {
+transform: translateY(-1px);
+box-shadow: 0 15px 30px rgba(37, 99, 235, 0.25);
+}
+
+.vrsp-quote {
+font-size: 1.1rem;
+font-weight: 600;
+color: #0f172a;
+}
+
+.vrsp-message {
+padding: 1rem;
+border-radius: 8px;
+margin-top: 1rem;
+}
+
+.vrsp-message.error { background: #fee2e2; color: #b91c1c; }
+.vrsp-message.success { background: #dcfce7; color: #15803d; }
