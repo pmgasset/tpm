@@ -11,7 +11,6 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
     <section class="vrsp-card vrsp-card--availability">
         <header class="vrsp-card__header">
             <h2><?php esc_html_e( 'Check Availability', 'vr-single-property' ); ?></h2>
-            <p><?php esc_html_e( 'Always up to date with Airbnb, VRBO, and Booking.com sync.', 'vr-single-property' ); ?></p>
         </header>
         <div class="vrsp-availability" data-base-rate="<?php echo esc_attr( number_format_i18n( $base_rate, 2 ) ); ?>" data-currency="<?php echo esc_attr( $currency ); ?>">
             <div class="vrsp-availability__calendar" aria-live="polite"></div>
@@ -26,7 +25,7 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
     <section class="vrsp-card vrsp-card--form">
         <header class="vrsp-card__header">
             <h2><?php esc_html_e( 'Reserve Your Stay', 'vr-single-property' ); ?></h2>
-            <p><?php esc_html_e( 'Secure checkout with Stripe. Deposits are calculated automatically.', 'vr-single-property' ); ?></p>
+            <p><?php esc_html_e( 'Request a quote to review nightly rates, fees, and deposit requirements before continuing to secure payment with Stripe.', 'vr-single-property' ); ?></p>
         </header>
         <form class="vrsp-form">
             <div class="vrsp-form__grid">
@@ -63,10 +62,14 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
                     <input type="tel" name="phone" />
                 </label>
             </div>
-            <button type="submit" class="vrsp-form__submit"><?php esc_html_e( 'Continue to Secure Payment', 'vr-single-property' ); ?></button>
+            <div class="vrsp-form__actions">
+                <button type="submit" class="vrsp-form__submit"><?php esc_html_e( 'Get Quote', 'vr-single-property' ); ?></button>
+                <button type="button" class="vrsp-form__continue" disabled><?php esc_html_e( 'Continue to Secure Payment', 'vr-single-property' ); ?></button>
+            </div>
         </form>
         <div class="vrsp-quote" hidden>
             <h3><?php esc_html_e( 'Trip summary', 'vr-single-property' ); ?></h3>
+            <p class="vrsp-quote__intro"><?php esc_html_e( 'Review the quote below. When everything looks good, continue to secure your payment.', 'vr-single-property' ); ?></p>
             <dl class="vrsp-quote__grid">
                 <div>
                     <dt><?php esc_html_e( 'Nights', 'vr-single-property' ); ?></dt>

@@ -33,6 +33,40 @@ text-transform: uppercase;
     vertical-align: top;
 }
 
+.vrsp-admin .vrsp-bookings-table tr.is-updated {
+    background: #eff6ff;
+}
+
+.vrsp-admin .vrsp-bookings-table .vrsp-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
 .vrsp-admin .vrsp-bookings-table .vrsp-actions form {
     margin: 0;
+}
+
+.vrsp-admin .vrsp-inline-form {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.vrsp-admin .vrsp-inline-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.vrsp-admin .vrsp-inline-field select {
+    width: 100%;
+}
+
+.vrsp-admin .vrsp-inline-flags {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }

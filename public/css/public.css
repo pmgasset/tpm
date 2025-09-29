@@ -19,8 +19,14 @@
     gap: 1.25rem;
 }
 
+.vrsp-card__header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
 .vrsp-card__header h2 {
-    margin: 0 0 0.5rem;
+    margin: 0;
     font-size: 1.5rem;
     font-weight: 700;
     color: #0f172a;
@@ -111,8 +117,15 @@
     outline: none;
 }
 
-.vrsp-form__submit {
+.vrsp-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
     margin-top: 0.5rem;
+}
+
+.vrsp-form__submit {
     border: none;
     border-radius: 999px;
     padding: 0.85rem 1.75rem;
@@ -128,6 +141,30 @@
 .vrsp-form__submit:hover {
     transform: translateY(-1px);
     box-shadow: 0 20px 40px rgba(37, 99, 235, 0.3);
+}
+
+.vrsp-form__continue {
+    border-radius: 999px;
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    background: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.vrsp-form__continue:hover:not([disabled]) {
+    background: #cbd5f5;
+    color: #1e293b;
+    transform: translateY(-1px);
+}
+
+.vrsp-form__continue[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .vrsp-quote[hidden] {
@@ -168,12 +205,24 @@
     color: #475569;
 }
 
+.vrsp-quote__intro {
+    margin: 0;
+    color: #334155;
+    font-size: 0.95rem;
+}
+
 .vrsp-message {
     border-radius: 12px;
     padding: 0.85rem 1rem;
     font-weight: 600;
     font-size: 0.95rem;
     display: none;
+}
+
+.vrsp-message.info {
+    display: block;
+    background: #e0f2fe;
+    color: #0369a1;
 }
 
 .vrsp-message.error {
