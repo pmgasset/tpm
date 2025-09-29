@@ -36,9 +36,23 @@ if ( 0 !== strpos( $class, 'VRSP\\' ) ) {
 return;
 }
 
-$relative = strtolower( str_replace( [ 'VRSP\\', '_' ], [ '', '-' ], $class ) );
-$relative = str_replace( '\\', '/', $relative );
-$file     = VRSP_PLUGIN_DIR . 'includes/class-' . $relative . '.php';
+$relative = substr( $class, strlen( 'VRSP\\' ) );
+$parts    = array_filter( explode( '\\', $relative ) );
+
+if ( empty( $parts ) ) {
+return;
+}
+
+$filename = array_pop( $parts );
+$path     = VRSP_PLUGIN_DIR . 'includes/';
+
+if ( ! empty( $parts ) ) {
+$path .= implode( '/', $parts ) . '/';
+}
+
+$filename = strtolower( preg_replace( '/([a-z0-9])([A-Z])/', '$1-$2', $filename ) );
+$filename = str_replace( '_', '-', $filename );
+$file     = $path . 'class-' . $filename . '.php';
 
 if ( file_exists( $file ) ) {
 require_once $file;
