@@ -2,6 +2,7 @@
 namespace VRSP\Utilities;
 
 use DateInterval;
+use DatePeriod;
 use DateTimeImmutable;
 use VRSP\Settings;
 
@@ -141,11 +142,32 @@ $this->save_state( $state );
 return $uplift;
 }
 
-public function persist_booking_meta( int $booking_id, array $quote ): void {
-update_post_meta( $booking_id, '_vrsp_quote', $quote );
-update_post_meta( $booking_id, '_vrsp_uplift_percent', $quote['uplift_percent'] ?? 0 );
-update_post_meta( $booking_id, '_vrsp_coupon', $quote['coupon']['code'] ?? '' );
-}
+    public function persist_booking_meta( int $booking_id, array $quote ): void {
+        update_post_meta( $booking_id, '_vrsp_quote', $quote );
+        update_post_meta( $booking_id, '_vrsp_uplift_percent', $quote['uplift_percent'] ?? 0 );
+        update_post_meta( $booking_id, '_vrsp_coupon', $quote['coupon']['code'] ?? '' );
+    }
+
+    public function get_calendar_rates( DateTimeImmutable $from, DateTimeImmutable $to ): array {
+        if ( $to <= $from ) {
+            return [];
+        }
+
+        $period  = new DatePeriod( $from, new DateInterval( 'P1D' ), $to );
+        $rates   = [];
+        $base    = (float) $this->settings->get( 'base_rate', 200 );
+        $uplift  = $this->get_dynamic_uplift();
+        $nightly = round( $base + ( $base * $uplift ), 2 );
+
+        foreach ( $period as $day ) {
+            $rates[] = [
+                'date'   => $day->format( 'Y-m-d' ),
+                'amount' => $nightly,
+            ];
+        }
+
+        return $rates;
+    }
 
 private function get_coupon( string $code, DateTimeImmutable $arrival ): ?array {
 if ( ! $code ) {

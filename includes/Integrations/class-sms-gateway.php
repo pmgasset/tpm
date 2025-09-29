@@ -11,10 +11,12 @@ class SmsGateway {
 private $settings;
 private $logger;
 
-public function __construct( Settings $settings, Logger $logger ) {
-$this->settings = $settings;
-$this->logger   = $logger;
-}
+    public function __construct( Settings $settings, Logger $logger ) {
+        $this->settings = $settings;
+        $this->logger   = $logger;
+
+        add_action( 'vrsp_booking_pending_admin', [ $this, 'notify_admin_pending' ] );
+    }
 
 public function send_housekeeping_checkout( int $booking_id ): void {
 $number = $this->settings->get( 'sms_housekeeper_number', '' );
@@ -46,22 +48,43 @@ $booking_id
 $this->send_sms( $number, $message );
 }
 
-public function handle_inbound( array $payload ): void {
-if ( ! $this->verify_signature( $payload ) ) {
-$this->logger->warning( 'Invalid SMS webhook signature.' );
-return;
-}
+    public function handle_inbound( array $payload ): void {
+        if ( ! $this->verify_signature( $payload ) ) {
+            $this->logger->warning( 'Invalid SMS webhook signature.' );
+            return;
+        }
 
 $message = strtoupper( trim( $payload['message'] ?? '' ) );
 $from    = sanitize_text_field( $payload['from'] ?? '' );
 $booking_id = absint( $payload['booking'] ?? 0 );
 
-if ( '1' === $message ) {
-do_action( 'vrsp_sms_housekeeping_ready', $booking_id, $from );
-} elseif ( '2' === $message ) {
-do_action( 'vrsp_sms_housekeeping_issue', $booking_id, $from );
-}
-}
+        if ( '1' === $message ) {
+            do_action( 'vrsp_sms_housekeeping_ready', $booking_id, $from );
+        } elseif ( '2' === $message ) {
+            do_action( 'vrsp_sms_housekeeping_issue', $booking_id, $from );
+        }
+    }
+
+    public function notify_admin_pending( int $booking_id ): void {
+        $number = $this->settings->get( 'sms_owner_number', '' );
+        if ( ! $number ) {
+            return;
+        }
+
+        $arrival   = get_post_meta( $booking_id, '_vrsp_arrival', true );
+        $departure = get_post_meta( $booking_id, '_vrsp_departure', true );
+        $guest     = get_the_title( $booking_id );
+
+        $message = sprintf(
+            /* translators: 1: guest name, 2: arrival date, 3: departure date */
+            __( 'New booking from %1$s awaiting approval (%2$s → %3$s).', 'vr-single-property' ),
+            $guest,
+            $arrival,
+            $departure
+        );
+
+        $this->send_sms( $number, $message );
+    }
 
 private function send_sms( string $to, string $message ): void {
 $username = $this->settings->get( 'sms_api_username', '' );

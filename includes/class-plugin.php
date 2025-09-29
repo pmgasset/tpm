@@ -62,6 +62,7 @@ return self::$instance;
         if ( function_exists( 'load_plugin_textdomain' ) ) {
             load_plugin_textdomain( 'vr-single-property', false, dirname( plugin_basename( VRSP_PLUGIN_FILE ) ) . '/languages/' );
         }
+        add_role( 'vrsp_guest', __( 'Guest', 'vr-single-property' ), [ 'read' => true ] );
         RentalPostType::register_post_type();
         BasePostType::flush_rewrite();
         CronManager::activate();
@@ -88,16 +89,23 @@ LogPostType::register();
 
 $this->boot_modules();
 
-add_action( 'init', [ $this, 'load_textdomain' ] );
-add_action( 'init', [ $this->settings, 'refresh' ], 11 );
+        add_action( 'init', [ $this, 'load_textdomain' ] );
+        add_action( 'init', [ $this, 'ensure_roles' ] );
+        add_action( 'init', [ $this->settings, 'refresh' ], 11 );
 }
 
 /**
  * Load text domain.
  */
-public function load_textdomain(): void {
-load_plugin_textdomain( 'vr-single-property', false, dirname( plugin_basename( VRSP_PLUGIN_FILE ) ) . '/languages/' );
-}
+    public function load_textdomain(): void {
+        load_plugin_textdomain( 'vr-single-property', false, dirname( plugin_basename( VRSP_PLUGIN_FILE ) ) . '/languages/' );
+    }
+
+    public function ensure_roles(): void {
+        if ( ! get_role( 'vrsp_guest' ) ) {
+            add_role( 'vrsp_guest', __( 'Guest', 'vr-single-property' ), [ 'read' => true ] );
+        }
+    }
 
 /**
  * Boot supporting modules.
