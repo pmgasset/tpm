@@ -21,6 +21,16 @@ class RentalPostType extends BasePostType {
             self::get_key(),
             [
                 'labels'              => self::get_labels(),
+
+
+
+
+
+                'labels'       => self::get_labels(),
+
+
+
+
                 'public'              => true,
                 'show_ui'             => true,
                 'show_in_menu'        => 'vrsp-dashboard',
