@@ -1,0 +1,10 @@
+/vendor/
+node_modules/
+.DS_Store
+*.log
+.idea/
+*.zip
+.env
+composer.lock
+package-lock.json
+npm-debug.log
