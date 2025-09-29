@@ -57,18 +57,20 @@ return self::$instance;
 /**
  * Activation hook.
  */
-public static function activate(): void {
-self::get_instance();
-BasePostType::flush_rewrite();
-CronManager::activate();
-}
+    public static function activate(): void {
+        self::get_instance();
+        RentalPostType::register_post_type();
+        BasePostType::flush_rewrite();
+        CronManager::activate();
+    }
 
 /**
  * Deactivation hook.
  */
-public static function deactivate(): void {
-CronManager::deactivate();
-}
+    public static function deactivate(): void {
+        CronManager::deactivate();
+        BasePostType::flush_rewrite();
+    }
 
 /**
  * Constructor.

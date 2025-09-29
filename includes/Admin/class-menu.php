@@ -38,17 +38,25 @@ add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 }
 
 public function register_menu(): void {
-add_menu_page(
-__( 'VR Rental', 'vr-single-property' ),
-__( 'VR Rental', 'vr-single-property' ),
-'manage_options',
-'vrsp-dashboard',
-[ $this, 'render_dashboard' ],
-'dashicons-admin-multisite',
-30
-);
+        add_menu_page(
+            __( 'VR Rental', 'vr-single-property' ),
+            __( 'VR Rental', 'vr-single-property' ),
+            'manage_options',
+            'vrsp-dashboard',
+            [ $this, 'render_dashboard' ],
+            'dashicons-admin-multisite',
+            30
+        );
 
-add_submenu_page( 'vrsp-dashboard', __( 'Settings', 'vr-single-property' ), __( 'Settings', 'vr-single-property' ), 'manage_options', 'vrsp-settings', [ $this, 'render_settings_page' ] );
+        add_submenu_page(
+            'vrsp-dashboard',
+            __( 'Rentals', 'vr-single-property' ),
+            __( 'Rentals', 'vr-single-property' ),
+            'manage_options',
+            'edit.php?post_type=vrsp_rental'
+        );
+
+        add_submenu_page( 'vrsp-dashboard', __( 'Settings', 'vr-single-property' ), __( 'Settings', 'vr-single-property' ), 'manage_options', 'vrsp-settings', [ $this, 'render_settings_page' ] );
 add_submenu_page( 'vrsp-dashboard', __( 'Bookings', 'vr-single-property' ), __( 'Bookings', 'vr-single-property' ), 'manage_options', 'vrsp-bookings', [ $this, 'render_bookings_page' ] );
 add_submenu_page( 'vrsp-dashboard', __( 'Logs', 'vr-single-property' ), __( 'Logs', 'vr-single-property' ), 'manage_options', 'vrsp-logs', [ $this, 'render_logs_page' ] );
 }

@@ -1,37 +1,35 @@
 <?php
-$rental = get_posts(
-[
-'post_type'      => 'vrsp_rental',
-'posts_per_page' => 1,
-]
-);
-$rental = $rental ? $rental[0] : null;
-$gallery   = $rental ? get_attached_media( 'image', $rental->ID ) : [];
+/** @var WP_Post $rental */
+if ( ! isset( $rental ) || ! $rental instanceof WP_Post ) {
+    return;
+}
+
+$gallery   = get_attached_media( 'image', $rental->ID );
 $options   = get_option( \VRSP\Settings::OPTION_KEY, [] );
 $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 200;
 ?>
 <div class="vrsp-listing">
-<div class="vrsp-hero">
-<?php if ( $gallery ) :
-$images = array_slice( $gallery, 0, 4 );
-foreach ( $images as $image ) :
+    <div class="vrsp-hero">
+        <?php if ( $gallery ) :
+            $images = array_slice( $gallery, 0, 4 );
+            foreach ( $images as $image ) :
 ?>
 <img src="<?php echo esc_url( wp_get_attachment_image_url( $image->ID, 'large' ) ); ?>" alt="<?php echo esc_attr( get_post_meta( $image->ID, '_wp_attachment_image_alt', true ) ); ?>" />
 <?php endforeach; else : ?>
 <img src="<?php echo esc_url( VRSP_PLUGIN_URL . 'assets/placeholder.jpg' ); ?>" alt="" />
 <?php endif; ?>
-</div>
+    </div>
 
-<div class="vrsp-content">
-<div class="vrsp-grid two">
-<div class="vrsp-card">
-<h2><?php echo esc_html( get_the_title( $rental ) ); ?></h2>
-<div class="vrsp-description"><?php echo wp_kses_post( apply_filters( 'the_content', $rental ? $rental->post_content : '' ) ); ?></div>
-</div>
-<div class="vrsp-card vrsp-calendar">
-<h3><?php esc_html_e( 'Availability', 'vr-single-property' ); ?></h3>
-<div class="vrsp-availability"></div>
-<p><?php esc_html_e( 'Bookings auto-sync across Airbnb, VRBO, and Booking.com via iCal.', 'vr-single-property' ); ?></p>
+    <div class="vrsp-content">
+        <div class="vrsp-grid two">
+            <div class="vrsp-card">
+                <h2><?php echo esc_html( get_the_title( $rental ) ); ?></h2>
+                <div class="vrsp-description"><?php echo wp_kses_post( apply_filters( 'the_content', $rental->post_content ) ); ?></div>
+            </div>
+            <div class="vrsp-card vrsp-calendar">
+                <h3><?php esc_html_e( 'Availability', 'vr-single-property' ); ?></h3>
+                <div class="vrsp-availability"></div>
+                <p><?php esc_html_e( 'Bookings auto-sync across Airbnb, VRBO, and Booking.com via iCal.', 'vr-single-property' ); ?></p>
 </div>
 </div>
 
