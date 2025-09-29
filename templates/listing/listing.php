@@ -9,6 +9,7 @@ $options   = get_option( \VRSP\Settings::OPTION_KEY, [] );
 $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 200;
 $content   = $rental->post_content;
 
+
 $patterns = [
     '/\[vrsp_listing(?:\s+[^\]]*)?\](?:.*?\[\/vrsp_listing\])?/is',
     '/<!--\s+wp:vrsp\/listing.*?-->.*?<!--\s+\/wp:vrsp\/listing\s+-->/is',
@@ -29,6 +30,9 @@ $listing_block_class = 'VRSP\\Blocks\\ListingBlock';
 $guard_active        = class_exists( $listing_block_class ) && $listing_block_class::is_rendering();
 
 if ( $guard_active ) {
+
+if ( class_exists( '\\VRSP\\Blocks\\ListingBlock' ) && \VRSP\Blocks\ListingBlock::is_rendering() ) {
+
     $content = wpautop( $content );
 } else {
     $content = apply_filters( 'the_content', $content );
