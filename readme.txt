@@ -2,7 +2,7 @@
 Contributors: vrsp
 Requires at least: 6.0
 Tested up to: 6.5
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -47,10 +47,16 @@ Set every tier uplift to `0` in **Settings → Dynamic Pricing** or place the op
 
 == Changelog ==
 
+= 0.1.1 =
+* Bump asset and plugin versions to ensure browsers load the latest scripts and styles.
+
 = 0.1.0 =
 * Initial release with payments, pricing, iCal, SMS, and check-in integration.
 
 == Upgrade Notice ==
+
+= 0.1.1 =
+Ensure browsers download the latest JavaScript and CSS by updating the versioned assets.
 
 = 0.1.0 =
 First public release.
