@@ -19,7 +19,6 @@
             rateList: listingData?.selectors?.rateList || '.vrsp-availability__rate-list',
         };
 
-
         const form = widget.querySelector(selectors.form);
         const quotePanel = widget.querySelector(selectors.quote);
         const message = widget.querySelector(selectors.message);
@@ -28,6 +27,8 @@
         const availability = widget.querySelector(selectors.availability);
         const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
         const rateListEl = widget.querySelector(selectors.rateList);
+
+
         const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
         const rateList = widget.querySelector(selectors.rateList);
 
@@ -40,6 +41,7 @@
         const availability = widget.querySelector(selectors.availability);
         const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
         const rateListEl = widget.querySelector(selectors.rateList);
+
 
         if (!form || !quotePanel || !continueButton || !availability) {
             return;
@@ -56,7 +58,10 @@
             if (!availabilityCalendarEl) {
 
 
+
+
             if (!availabilityCalendar) {
+
 
                 return;
             }
@@ -206,6 +211,22 @@
             }, 350);
         };
 
+
+        const hasQuoteRequirements = (payload) =>
+            Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
+
+        const scheduleQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+            }
+
+            quoteDebounceId = window.setTimeout(() => {
+                quoteDebounceId = null;
+                requestQuote();
+            }, 350);
+        };
+
+
         const requestQuote = () => {
             if (quoteDebounceId) {
                 window.clearTimeout(quoteDebounceId);
@@ -234,6 +255,38 @@
             }
 
             if (!listingData.api) {
+
+
+            const payload = collectPayload();
+
+            resetMessage();
+
+            if (!hasQuoteRequirements(payload)) {
+
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                setButtonState(submitButton, false);
+                if (message) {
+
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quotePrompt ||
+                        'Enter your trip details to see an instant quote.';
+                }
+                if (quoteController) {
+                    quoteController.abort();
+                    quoteController = null;
+
+                }
+                return;
+            }
+
+
+
+            if (!listingData.api) {
                 latestPayload = null;
                 populateQuote(null);
                 setButtonState(continueButton, true);
@@ -242,13 +295,22 @@
             event.preventDefault();
             resetMessage();
             latestPayload = null;
+
             setButtonState(continueButton, true);
-
-            const payload = collectPayload();
-
-            populateQuote(null);
-
             setButtonState(submitButton, true);
+
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.quoteLoading || 'Fetching your quote…';
+            }
+
+            if (quoteController) {
+                quoteController.abort();
+            }
+
+            quoteController = new AbortController();
+            const currentRequestId = ++quoteRequestId;
+
 
             if (!listingData.api) {
 
@@ -276,6 +338,7 @@
             quoteController = new AbortController();
             const currentRequestId = ++quoteRequestId;
 
+
             fetch(`${listingData.api}/quote`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -297,6 +360,24 @@
 
                     if (quote.error) {
                         throw new Error(quote.error);
+
+                    }
+
+                    populateQuote(quote);
+                    latestPayload = payload;
+                    setButtonState(continueButton, false);
+                    if (message) {
+                        resetMessage();
+                        message.classList.add('success');
+                        message.textContent = listingData?.i18n?.quoteReady ||
+                            'Quote ready! Review the details before continuing to payment.';
+                    }
+                })
+                .catch((error) => {
+                    if (error?.name === 'AbortError') {
+                        return;
+                    }
+
                     }
 
                     populateQuote(quote);
@@ -318,6 +399,7 @@
                         return;
                     }
 
+
                     if (currentRequestId !== quoteRequestId) {
                         return;
                     }
@@ -331,6 +413,10 @@
                         resetMessage();
 
 
+                        resetMessage();
+
+
+
                         message.classList.add('error');
                         message.textContent = error.message || getGenericError();
                     }
@@ -341,6 +427,7 @@
                         quoteController = null;
                         setButtonState(submitButton, false);
                     }
+
 
                     setButtonState(submitButton, false);
 
@@ -359,7 +446,11 @@
                 if (message) {
                     message.classList.add('info');
                     message.textContent = listingData?.i18n?.quoteRequired ||
+
+                        'We need to finish building your quote before continuing to secure payment.';
+
                         'Request a quote before continuing to secure payment.';
+
                 }
                 return;
             }
@@ -370,6 +461,7 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
 
             }
 
@@ -395,6 +487,7 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
 
             }
 
@@ -474,6 +567,27 @@
             });
         }
 
+
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+            });
+            form.addEventListener('input', () => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+                scheduleQuote();
+            });
+            form.addEventListener('change', () => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+                scheduleQuote();
+            });
+        }
+
         if (continueButton) {
             continueButton.addEventListener('click', handleContinue);
         }
@@ -493,9 +607,14 @@
             });
         }
 
+
         if (continueButton) {
             continueButton.addEventListener('click', handleContinue);
         }
+
+
+        scheduleQuote();
+
 
 
         widget.dataset.vrspReady = 'true';
