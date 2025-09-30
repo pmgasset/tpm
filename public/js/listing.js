@@ -57,6 +57,9 @@
         }
 
         quotePanel.hidden = false;
+        if (!quotePanel.hasAttribute('tabindex')) {
+            quotePanel.setAttribute('tabindex', '-1');
+        }
         widget.querySelector('[data-quote="nights"]').textContent = quote.nights;
         widget.querySelector('[data-quote="subtotal"]').textContent = formatCurrency(quote.subtotal);
         const taxes = Number(quote.taxes || 0) + Number(quote.cleaning_fee || 0) + Number(quote.damage_fee || 0);
@@ -171,6 +174,51 @@
                 populateQuote(quote);
                 latestPayload = payload;
                 setButtonState(continueButton, false);
+                if (!quotePanel.hidden) {
+                    quotePanel.focus({ preventScroll: true });
+                }
+
+                if (message) {
+                    message.classList.add('info');
+                    message.textContent = window.vrspListing.i18n?.quoteReady || 'Quote ready! Review the details before continuing to payment.';
+                }
+            })
+            .catch((error) => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = error.message || window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.';
+                }
+            })
+            .finally(() => {
+                setButtonState(submitButton, false);
+            });
+    };
+
+    const handleContinue = () => {
+        if (!continueButton) {
+            return;
+        }
+
+        if (!latestPayload) {
+            resetMessage();
+            if (message) {
+                message.classList.add('info');
+                message.textContent = window.vrspListing.i18n?.quoteRequired || 'Request a quote before continuing to secure payment.';
+            }
+            return;
+        }
+
+        resetMessage();
+        setButtonState(continueButton, true);
+        setButtonState(submitButton, true);
+        if (message) {
+            message.classList.add('info');
+            message.textContent = window.vrspListing.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+        }
+
                 if (continueButton) {
                     continueButton.focus();
                 }
