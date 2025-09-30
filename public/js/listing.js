@@ -53,6 +53,8 @@
         if (!node) {
             return;
         }
+        return fallback;
+    }
 
         while (node.firstChild) {
             node.removeChild(node.firstChild);
