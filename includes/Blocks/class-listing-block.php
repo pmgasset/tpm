@@ -129,6 +129,8 @@ class ListingBlock {
                 'rules'    => $this->rules->get_rules(),
                 'i18n'     => [
                     'availabilityEmpty' => __( 'Your preferred dates are open!', 'vr-single-property' ),
+                    'quotePrompt'       => __( 'Enter your trip details to see an instant quote.', 'vr-single-property' ),
+                    'quoteLoading'      => __( 'Fetching your quote…', 'vr-single-property' ),
                     'depositNote'       => __( 'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.', 'vr-single-property' ),
                     'fullBalanceNote'   => __( 'Your stay begins soon, so the full balance is due today.', 'vr-single-property' ),
                     'quoteReady'        => __( 'Quote ready! Review the details before continuing to payment.', 'vr-single-property' ),
