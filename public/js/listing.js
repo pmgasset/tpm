@@ -27,6 +27,8 @@
         const availability = widget.querySelector(selectors.availability);
         const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
         const rateListEl = widget.querySelector(selectors.rateList);
+        const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
+        const rateList = widget.querySelector(selectors.rateList);
 
         if (!form || !quotePanel || !submitButton || !continueButton || !availability) {
             return;
@@ -41,6 +43,7 @@
 
         const renderBlocked = (blocked) => {
             if (!availabilityCalendarEl) {
+            if (!availabilityCalendar) {
                 return;
             }
 
@@ -268,6 +271,18 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+            }
+
+            if (!listingData.api) {
+                setButtonState(continueButton, false);
+                setButtonState(submitButton, false);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+                }
+                return;
+            }
+
             }
 
             if (!listingData.api) {
