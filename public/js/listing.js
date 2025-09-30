@@ -9,11 +9,13 @@
         form: '[data-vrsp="form"], .vrsp-form',
         continueButton: '[data-vrsp="continue"], .vrsp-form__continue',
         message: '[data-vrsp="message"], .vrsp-message',
-        quotePanel: '[data-vrsp="quote"], .vrsp-quote',
         availability: '[data-vrsp="availability"], .vrsp-availability',
         calendar: '[data-vrsp="calendar"], .vrsp-availability__calendar',
-        rateList: '[data-vrsp="rate-list"], .vrsp-availability__rate-list'
+        payment: '[data-vrsp="payment"], .vrsp-form__payment'
     };
+
+    var SUMMARY_FIELDS = ['arrival', 'departure', 'nights'];
+    var PRICING_FIELDS = ['stay', 'cleaning', 'taxes', 'total', 'deposit', 'balance'];
 
     var stateByWidget = new WeakMap();
     var initAttempts = 0;
@@ -23,8 +25,6 @@
         if (listingData && listingData.i18n && listingData.i18n[key]) {
             return listingData.i18n[key];
         }
-        return fallback;
-    }
 
         return fallback;
     }
@@ -53,6 +53,8 @@
         if (!node) {
             return;
         }
+        return fallback;
+    }
 
         while (node.firstChild) {
             node.removeChild(node.firstChild);
@@ -69,8 +71,18 @@
                 first_name: '',
                 last_name: '',
                 email: '',
-                phone: ''
+                phone: '',
+                payment_option: 'deposit'
             };
+        }
+
+        var paymentOption = 'deposit';
+        if (form.payment_option) {
+            try {
+                paymentOption = form.payment_option.value || 'deposit';
+            } catch (error) {
+                paymentOption = 'deposit';
+            }
         }
 
         return {
@@ -81,19 +93,38 @@
             first_name: form.first_name ? form.first_name.value : '',
             last_name: form.last_name ? form.last_name.value : '',
             email: form.email ? form.email.value : '',
-            phone: form.phone ? form.phone.value : ''
+            phone: form.phone ? form.phone.value : '',
+            payment_option: paymentOption
         };
     }
 
-    function hasRequiredQuoteFields(payload) {
+    function hasQuoteFields(payload) {
+        return payload && payload.arrival && payload.departure;
+    }
+
+    function hasCheckoutFields(payload) {
         return (
             payload &&
-            payload.arrival &&
-            payload.departure &&
             payload.first_name &&
             payload.last_name &&
             payload.email
         );
+    }
+
+    function sameCoreQuoteFields(nextPayload, previousPayload) {
+        if (!nextPayload || !previousPayload) {
+            return false;
+        }
+
+        var keys = ['arrival', 'departure', 'guests', 'coupon'];
+        for (var i = 0; i < keys.length; i += 1) {
+            var key = keys[i];
+            if ((nextPayload[key] || '') !== (previousPayload[key] || '')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     function setButtonDisabled(button, disabled) {
@@ -128,62 +159,336 @@
         node.textContent = text;
     }
 
-    function updateQuote(state, quote) {
-        var panel = state.quotePanel;
-        var formatCurrency = state.formatCurrency;
+    function parseISODate(value) {
+        if (!value || typeof value !== 'string') {
+            return null;
+        }
 
-        if (!panel) {
+        var parts = value.split('-');
+        if (parts.length < 3) {
+            return null;
+        }
+
+        var year = Number(parts[0]);
+        var month = Number(parts[1]) - 1;
+        var day = Number(parts[2]);
+
+        if (isNaN(year) || isNaN(month) || isNaN(day)) {
+            return null;
+        }
+
+        var date = new Date(year, month, day);
+        if (isNaN(date.getTime())) {
+            return null;
+        }
+
+        return date;
+    }
+
+    function formatDate(value) {
+        var date = parseISODate(value);
+        if (!date) {
+            return '—';
+        }
+
+        try {
+            return date.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        } catch (error) {
+            return value;
+        }
+    }
+
+    function differenceInDays(fromDate, toDate) {
+        if (!(fromDate instanceof Date) || !(toDate instanceof Date)) {
+            return null;
+        }
+
+        var fromUTC = Date.UTC(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+        var toUTC = Date.UTC(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
+        var diff = toUTC - fromUTC;
+
+        return Math.round(diff / 86400000);
+    }
+
+    function computeNights(payload) {
+        var arrival = parseISODate(payload && payload.arrival);
+        var departure = parseISODate(payload && payload.departure);
+
+        if (!arrival || !departure) {
+            return null;
+        }
+
+        var diff = differenceInDays(arrival, departure);
+        if (diff === null || diff <= 0) {
+            return null;
+        }
+
+        return diff;
+    }
+
+    function roundCurrency(value) {
+        var amount = Number(value || 0);
+        if (!isFinite(amount)) {
+            amount = 0;
+        }
+
+        return Math.round(amount * 100) / 100;
+    }
+
+    function updateSummary(state, payload) {
+        var summary = state.summaryTargets;
+        if (!summary) {
             return;
         }
 
-        if (!quote) {
-            panel.hidden = true;
-            return;
+        if (summary.arrival) {
+            summary.arrival.textContent = formatDate(payload.arrival);
         }
 
-        panel.hidden = false;
+        if (summary.departure) {
+            summary.departure.textContent = formatDate(payload.departure);
+        }
 
-        var write = function (key, value) {
-            var target = state.quoteTargets[key];
-            if (target) {
-                target.textContent = value;
+        if (summary.nights) {
+            var nights = computeNights(payload);
+            summary.nights.textContent = nights !== null ? nights : '—';
+        }
+    }
+
+    function resetPricing(state) {
+        var targets = state.pricingTargets;
+        if (targets) {
+            for (var i = 0; i < PRICING_FIELDS.length; i += 1) {
+                var field = PRICING_FIELDS[i];
+                if (targets[field]) {
+                    targets[field].textContent = '—';
+                }
             }
-        };
+        }
 
-        write('nights', quote.nights || '—');
-        write('subtotal', formatCurrency(quote.subtotal || 0));
+        if (state.pricingNote) {
+            state.pricingNote.textContent = '';
+        }
 
+        updatePaymentOptions(state, null);
+        state.lastBreakdown = null;
+    }
+
+    function computeBreakdown(state, payload, quote) {
+        if (!quote) {
+            return null;
+        }
+
+        var nights = null;
+        if (typeof quote.nights !== 'undefined' && quote.nights !== null && quote.nights !== '') {
+            nights = Number(quote.nights);
+            nights = isNaN(nights) ? null : nights;
+        }
+
+        if (nights === null) {
+            nights = computeNights(payload);
+        }
+
+        var stay = Number(quote.subtotal || 0);
+        if (!isFinite(stay)) {
+            stay = 0;
+        }
+
+        var cleaning = Number(quote.cleaning_fee || quote.cleaning || 0);
+        if (!isFinite(cleaning)) {
+            cleaning = 0;
+        }
+
+        var taxFields = ['taxes', 'fees', 'service_fee', 'damage_fee'];
         var taxes = 0;
-        taxes += Number(quote.taxes || 0);
-        taxes += Number(quote.cleaning_fee || 0);
-        taxes += Number(quote.damage_fee || 0);
-        write('taxes', formatCurrency(taxes));
+        for (var i = 0; i < taxFields.length; i += 1) {
+            var value = Number(quote[taxFields[i]] || 0);
+            if (isFinite(value)) {
+                taxes += value;
+            }
+        }
 
-        write('total', formatCurrency(quote.total || 0));
-        write('deposit', formatCurrency(quote.deposit || 0));
+        var total = Number(quote.total || stay + cleaning + taxes);
+        if (!isFinite(total)) {
+            total = stay + cleaning + taxes;
+        }
 
-        if (quote.deposit && quote.total && Number(quote.deposit) < Number(quote.total)) {
-            state.balanceRow.style.display = '';
-            write('balance', formatCurrency(quote.balance || 0));
-            state.note.textContent = getText(
+        total = roundCurrency(total);
+        stay = roundCurrency(stay);
+        cleaning = roundCurrency(cleaning);
+        taxes = roundCurrency(taxes);
+
+        var rules = (state.listingData && state.listingData.rules) || {};
+        var threshold = Number(rules.deposit_threshold);
+        if (!isFinite(threshold)) {
+            threshold = 7;
+        }
+
+        var percent = Number(rules.deposit_percent);
+        if (!isFinite(percent) || percent <= 0 || percent >= 1) {
+            percent = 0.5;
+        }
+
+        var arrivalDate = parseISODate(payload.arrival);
+        var today = new Date();
+        var daysUntilArrival = differenceInDays(today, arrivalDate);
+        var requiresFull = daysUntilArrival === null ? false : daysUntilArrival <= threshold;
+
+        var depositBase = roundCurrency(total * percent);
+        if (depositBase > total) {
+            depositBase = total;
+        }
+
+        var paymentOption = payload.payment_option === 'full' ? 'full' : 'deposit';
+        if (requiresFull) {
+            paymentOption = 'full';
+        }
+
+        var deposit = paymentOption === 'full' ? total : depositBase;
+        deposit = roundCurrency(deposit);
+
+        if (deposit > total) {
+            deposit = total;
+        }
+
+        var balance = roundCurrency(total - deposit);
+        if (balance < 0) {
+            balance = 0;
+        }
+
+        var noteKey = paymentOption === 'full' ? 'fullBalanceNote' : 'depositNote';
+
+        return {
+            nights: nights,
+            stay: stay,
+            cleaning: cleaning,
+            taxes: taxes,
+            total: total,
+            deposit: deposit,
+            balance: balance,
+            requiresFull: requiresFull,
+            paymentOption: paymentOption,
+            noteKey: noteKey
+        };
+    }
+
+    function updatePaymentOptions(state, breakdown) {
+        var payment = state.payment;
+        if (!payment) {
+            return;
+        }
+
+        var depositRadio = payment.deposit;
+        var fullRadio = payment.full;
+
+        if (!breakdown) {
+            if (depositRadio) {
+                depositRadio.disabled = false;
+            }
+
+            if (payment.note) {
+                payment.note.textContent = '';
+            }
+
+            return;
+        }
+
+        if (depositRadio) {
+            depositRadio.disabled = breakdown.requiresFull;
+            if (breakdown.requiresFull) {
+                depositRadio.checked = false;
+            } else if (breakdown.paymentOption === 'deposit') {
+                depositRadio.checked = true;
+            }
+        }
+
+        if (fullRadio) {
+            if (breakdown.paymentOption === 'full' || breakdown.requiresFull) {
+                fullRadio.checked = true;
+            } else if (depositRadio && depositRadio.checked) {
+                fullRadio.checked = false;
+            }
+        }
+
+        if (payment.note) {
+            if (breakdown.requiresFull) {
+                payment.note.textContent = getText(
+                    state.listingData,
+                    'paymentFullRequired',
+                    'This stay begins within 7 days. Full payment is required today.'
+                );
+            } else {
+                payment.note.textContent = getText(
+                    state.listingData,
+                    'paymentChoice',
+                    'Pay a 50% deposit today or choose to pay in full.'
+                );
+            }
+        }
+    }
+
+    function writePricing(state, payload, quote) {
+        var breakdown = computeBreakdown(state, payload, quote);
+
+        if (!breakdown) {
+            resetPricing(state);
+            return false;
+        }
+
+        state.lastBreakdown = breakdown;
+
+        var targets = state.pricingTargets;
+        if (targets) {
+            if (targets.stay) {
+                targets.stay.textContent = state.formatCurrency(breakdown.stay);
+            }
+
+            if (targets.cleaning) {
+                targets.cleaning.textContent = state.formatCurrency(breakdown.cleaning);
+            }
+
+            if (targets.taxes) {
+                targets.taxes.textContent = state.formatCurrency(breakdown.taxes);
+            }
+
+            if (targets.total) {
+                targets.total.textContent = state.formatCurrency(breakdown.total);
+            }
+
+            if (targets.deposit) {
+                targets.deposit.textContent = state.formatCurrency(breakdown.deposit);
+            }
+
+            if (targets.balance) {
+                targets.balance.textContent = state.formatCurrency(breakdown.balance);
+            }
+        }
+
+        if (state.pricingNote) {
+            state.pricingNote.textContent = getText(
                 state.listingData,
-                'depositNote',
-                'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.'
-            );
-        } else {
-            state.balanceRow.style.display = 'none';
-            state.note.textContent = getText(
-                state.listingData,
-                'fullBalanceNote',
-                'Your stay begins soon, so the full balance is due today.'
+                breakdown.noteKey,
+                breakdown.paymentOption === 'full'
+                    ? 'Your stay begins soon, so the full balance is due today.'
+                    : 'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.'
             );
         }
+
+        updatePaymentOptions(state, breakdown);
+
+        if (state.summaryTargets && state.summaryTargets.nights && breakdown.nights !== null) {
+            state.summaryTargets.nights.textContent = breakdown.nights;
+        }
+
+        return true;
     }
 
     function renderAvailability(state, payload) {
         var calendar = state.calendar;
-        var rateList = state.rateList;
-        var formatCurrency = state.formatCurrency;
 
         if (calendar) {
             clearChildren(calendar);
@@ -207,34 +512,6 @@
                     tag.textContent = windowItem.start + ' → ' + windowItem.end;
                     calendar.appendChild(tag);
                 }
-            }
-        }
-
-        if (rateList) {
-            clearChildren(rateList);
-
-            var rates = (payload && payload.rates) || [];
-
-            if (!rates.length) {
-                var fallback = document.createElement('span');
-                fallback.className = 'rate-pill';
-                var pattern = getText(state.listingData, 'rateFallback', 'Nightly from %s');
-                fallback.textContent = pattern.replace('%s', formatCurrency(state.baseRate || 0));
-                rateList.appendChild(fallback);
-                return;
-            }
-
-            var maxRates = Math.min(rates.length, 6);
-            for (var j = 0; j < maxRates; j += 1) {
-                var rate = rates[j];
-                if (!rate) {
-                    continue;
-                }
-
-                var pill = document.createElement('span');
-                pill.className = 'rate-pill';
-                pill.textContent = rate.date + ': ' + formatCurrency(rate.amount);
-                rateList.appendChild(pill);
             }
         }
     }
@@ -277,34 +554,23 @@
         var listingData = state.listingData;
         var payload = readForm(state.form);
 
-        if (!hasRequiredQuoteFields(payload)) {
+        updateSummary(state, payload);
+
+        if (!hasQuoteFields(payload)) {
             state.latestPayload = null;
             state.latestQuote = null;
-            if (state.quoteAbort && supportsAbortController) {
-                state.quoteAbort.abort();
-            }
-            state.quoteAbort = null;
-            updateQuote(state, null);
+            resetPricing(state);
             setButtonDisabled(state.continueButton, true);
             writeMessage(
                 state,
                 'info',
-                getText(listingData, 'quotePrompt', 'Enter your trip details to see an instant quote.')
+                getText(listingData, 'quotePrompt', 'Select arrival and departure dates to see pricing.')
             );
             return;
         }
 
-        if (!listingData || !listingData.api) {
-            state.latestPayload = null;
-            state.latestQuote = null;
-            updateQuote(state, null);
-            setButtonDisabled(state.continueButton, true);
-            writeMessage(state, 'error', getText(listingData, 'genericError', 'Unable to process booking. Please try again.'));
-            return;
-        }
-
         setButtonDisabled(state.continueButton, true);
-        writeMessage(state, 'info', getText(listingData, 'quoteLoading', 'Fetching your quote…'));
+        writeMessage(state, 'info', getText(listingData, 'quoteLoading', 'Calculating pricing…'));
 
         if (state.quoteAbort && supportsAbortController) {
             state.quoteAbort.abort();
@@ -331,27 +597,39 @@
                 return response.json();
             })
             .then(function (quote) {
-                state.latestPayload = payload;
+                state.latestPayload = Object.assign({}, payload);
                 state.latestQuote = quote;
-                updateQuote(state, quote);
-                setButtonDisabled(state.continueButton, false);
-                writeMessage(
-                    state,
-                    'success',
-                    getText(listingData, 'quoteReady', 'Quote ready! Review the details before continuing to payment.')
-                );
+
+                writePricing(state, payload, quote);
+
+                if (hasCheckoutFields(payload)) {
+                    setButtonDisabled(state.continueButton, false);
+                    writeMessage(
+                        state,
+                        'success',
+                        getText(listingData, 'quoteReady', 'Pricing updated! Review and continue to secure payment.')
+                    );
+                } else {
+                    setButtonDisabled(state.continueButton, true);
+                    writeMessage(
+                        state,
+                        'info',
+                        getText(listingData, 'checkoutDetails', 'Add guest contact details to continue to secure payment.')
+                    );
+                }
             })
             .catch(function (error) {
                 if (controller && error && error.name === 'AbortError') {
                     return;
                 }
 
-                state.latestPayload = null;
+                state.latestPayload = Object.assign({}, payload);
                 state.latestQuote = null;
-                updateQuote(state, null);
-                setButtonDisabled(state.continueButton, true);
+                resetPricing(state);
+
                 var fallback = getText(listingData, 'genericError', 'Unable to process booking. Please try again.');
                 writeMessage(state, 'error', (error && error.message) || fallback);
+                setButtonDisabled(state.continueButton, true);
             })
             .finally(function () {
                 if (state.quoteAbort === controller) {
@@ -362,9 +640,9 @@
 
     function continueToCheckout(state) {
         var listingData = state.listingData;
-        var payload = state.latestPayload;
+        var payload = readForm(state.form);
 
-        if (!payload) {
+        if (!state.latestQuote) {
             writeMessage(
                 state,
                 'info',
@@ -373,8 +651,25 @@
             return;
         }
 
-        if (!listingData || !listingData.api) {
-            writeMessage(state, 'error', getText(listingData, 'genericError', 'Unable to process booking. Please try again.'));
+        if (!sameCoreQuoteFields(payload, state.latestPayload || {})) {
+            writeMessage(
+                state,
+                'info',
+                getText(listingData, 'quoteRefresh', 'Your stay details changed. Updating pricing…')
+            );
+            state.latestQuote = null;
+            state.latestPayload = null;
+            resetPricing(state);
+            scheduleQuote(state);
+            return;
+        }
+
+        if (!hasCheckoutFields(payload)) {
+            writeMessage(
+                state,
+                'info',
+                getText(listingData, 'checkoutDetails', 'Add guest contact details to continue to secure payment.')
+            );
             return;
         }
 
@@ -410,16 +705,36 @@
             });
     }
 
-    function collectQuoteTargets(widget) {
-        var fields = ['nights', 'subtotal', 'taxes', 'total', 'deposit', 'balance'];
+    function collectSummaryTargets(widget) {
         var targets = {};
+        for (var i = 0; i < SUMMARY_FIELDS.length; i += 1) {
+            var field = SUMMARY_FIELDS[i];
+            targets[field] = widget.querySelector('[data-summary="' + field + '"]');
+        }
+        return targets;
+    }
 
-        for (var i = 0; i < fields.length; i += 1) {
-            var field = fields[i];
-            targets[field] = widget.querySelector('[data-quote="' + field + '"]');
+    function collectPricingTargets(widget) {
+        var targets = {};
+        for (var i = 0; i < PRICING_FIELDS.length; i += 1) {
+            var field = PRICING_FIELDS[i];
+            targets[field] = widget.querySelector('[data-pricing="' + field + '"]');
+        }
+        return targets;
+    }
+
+    function collectPaymentControls(widget) {
+        var container = widget.querySelector(SELECTORS.payment);
+        if (!container) {
+            return null;
         }
 
-        return targets;
+        return {
+            container: container,
+            deposit: container.querySelector('[data-payment="deposit"]'),
+            full: container.querySelector('[data-payment="full"]'),
+            note: container.querySelector('[data-payment="note"]')
+        };
     }
 
     function mountWidget(widget, listingData) {
@@ -430,11 +745,9 @@
         var form = widget.querySelector(SELECTORS.form);
         var continueButtons = widget.querySelectorAll(SELECTORS.continueButton);
         var continueButton = continueButtons.length ? continueButtons[0] : null;
-        var quotePanel = widget.querySelector(SELECTORS.quotePanel);
         var message = widget.querySelector(SELECTORS.message);
         var availability = widget.querySelector(SELECTORS.availability);
         var calendar = widget.querySelector(SELECTORS.calendar);
-        var rateList = widget.querySelector(SELECTORS.rateList);
 
         if (continueButtons.length > 1) {
             for (var i = 1; i < continueButtons.length; i += 1) {
@@ -445,7 +758,7 @@
             }
         }
 
-        if (!form || !continueButton || !quotePanel) {
+        if (!form || !continueButton) {
             return;
         }
 
@@ -475,17 +788,17 @@
             form: form,
             continueButton: continueButton,
             message: message,
-            quotePanel: quotePanel,
             availability: availability,
             calendar: calendar,
-            rateList: rateList,
             baseRate: baseRate,
             formatCurrency: createFormatter(currency),
-            quoteTargets: collectQuoteTargets(widget),
-            balanceRow: widget.querySelector('[data-quote="balance-row"]') || document.createElement('div'),
-            note: widget.querySelector('[data-quote="note"]') || document.createElement('p'),
+            summaryTargets: collectSummaryTargets(widget),
+            pricingTargets: collectPricingTargets(widget),
+            pricingNote: widget.querySelector('[data-pricing="note"]'),
+            payment: collectPaymentControls(widget),
             latestPayload: null,
             latestQuote: null,
+            lastBreakdown: null,
             quoteTimer: null,
             quoteAbort: null
         };
@@ -495,15 +808,61 @@
         });
 
         var onFormChange = function () {
-            state.latestPayload = null;
-            state.latestQuote = null;
-            updateQuote(state, null);
-            setButtonDisabled(state.continueButton, true);
-            writeMessage(state, '', '');
+            var payload = readForm(form);
+            updateSummary(state, payload);
+
+            if (!hasQuoteFields(payload)) {
+                if (state.quoteAbort && supportsAbortController) {
+                    state.quoteAbort.abort();
+                    state.quoteAbort = null;
+                }
+
+                state.latestPayload = null;
+                state.latestQuote = null;
+                resetPricing(state);
+                setButtonDisabled(state.continueButton, true);
+                writeMessage(
+                    state,
+                    'info',
+                    getText(state.listingData, 'quotePrompt', 'Select arrival and departure dates to see pricing.')
+                );
+                return;
+            }
+
+            if (state.latestQuote && state.latestPayload && sameCoreQuoteFields(payload, state.latestPayload)) {
+                state.latestPayload = Object.assign({}, state.latestPayload, payload);
+                writePricing(state, payload, state.latestQuote);
+
+                if (hasCheckoutFields(payload)) {
+                    setButtonDisabled(state.continueButton, false);
+                    writeMessage(
+                        state,
+                        'success',
+                        getText(state.listingData, 'quoteReady', 'Pricing updated! Review and continue to secure payment.')
+                    );
+                } else {
+                    setButtonDisabled(state.continueButton, true);
+                    writeMessage(
+                        state,
+                        'info',
+                        getText(state.listingData, 'checkoutDetails', 'Add guest contact details to continue to secure payment.')
+                    );
+                }
+
+                return;
+            }
+
             if (state.quoteAbort && supportsAbortController) {
                 state.quoteAbort.abort();
                 state.quoteAbort = null;
             }
+
+            state.latestPayload = null;
+            state.latestQuote = null;
+            state.lastBreakdown = null;
+            resetPricing(state);
+            setButtonDisabled(state.continueButton, true);
+            writeMessage(state, 'info', getText(state.listingData, 'quoteLoading', 'Calculating pricing…'));
             scheduleQuote(state);
         };
 
@@ -514,9 +873,21 @@
             continueToCheckout(state);
         });
 
+        if (state.payment && state.payment.container) {
+            state.payment.container.addEventListener('change', function (event) {
+                if (event && event.target && event.target.name === 'payment_option') {
+                    var payload = readForm(form);
+                    if (state.latestQuote && state.latestPayload && sameCoreQuoteFields(payload, state.latestPayload)) {
+                        writePricing(state, payload, state.latestQuote);
+                    }
+                }
+            });
+        }
+
         stateByWidget.set(widget, state);
 
-        setButtonDisabled(state.continueButton, true);
+        updateSummary(state, readForm(form));
+        resetPricing(state);
         fetchAvailability(state);
         requestQuote(state);
     }
@@ -578,7 +949,7 @@
         refresh: function () {
             init(true);
         },
-        version: '1.2.0'
+        version: '1.3.0'
     };
 
     if (document.readyState === 'loading') {
