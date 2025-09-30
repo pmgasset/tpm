@@ -216,34 +216,63 @@ continue;
 
 $event = [];
 $lines = preg_split( "/\r?\n/", $block );
-foreach ( $lines as $line ) {
-if ( empty( $line ) ) {
-continue;
+        foreach ( $lines as $line ) {
+            if ( empty( $line ) ) {
+                continue;
+            }
+
+            if ( false !== strpos( $line, ':' ) ) {
+                [ $raw_key, $value ] = array_map( 'trim', explode( ':', $line, 2 ) );
+                $key               = $this->normalize_property_name( $raw_key );
+                $event[ $key ]     = $value;
+            }
+        }
+
+        $start = $this->get_event_value( $event, 'DTSTART' );
+        $end   = $this->get_event_value( $event, 'DTEND' );
+
+        if ( empty( $start ) || empty( $end ) ) {
+            continue;
+        }
+
+        $events[] = [
+            'uid'         => $this->get_event_value( $event, 'UID' ) ?? md5( wp_json_encode( $event ) ),
+            'created'     => ( $dtstamp = $this->get_event_value( $event, 'DTSTAMP' ) ) ? strtotime( $dtstamp ) : time(),
+            'changed'     => ( $modified = $this->get_event_value( $event, 'LAST-MODIFIED' ) ) ? strtotime( $modified ) : time(),
+            'start'       => strtotime( $start ),
+            'end'         => strtotime( $end ),
+            'summary'     => $this->get_event_value( $event, 'SUMMARY' ) ?? '',
+            'description' => $this->get_event_value( $event, 'DESCRIPTION' ) ?? '',
+        ];
+    }
+
+    return $events;
 }
 
-if ( false !== strpos( $line, ':' ) ) {
-[ $key, $value ] = array_map( 'trim', explode( ':', $line, 2 ) );
-$key = strtoupper( $key );
-$event[ $key ] = $value;
-}
+private function normalize_property_name( string $property ): string {
+    $property = strtoupper( $property );
+
+    if ( false !== strpos( $property, ';' ) ) {
+        [ $property ] = explode( ';', $property, 2 );
+    }
+
+    return $property;
 }
 
-if ( empty( $event['DTSTART'] ) || empty( $event['DTEND'] ) ) {
-continue;
-}
+private function get_event_value( array $event, string $property ) {
+    $normalized = $this->normalize_property_name( $property );
 
-$events[] = [
-'uid'         => $event['UID'] ?? md5( wp_json_encode( $event ) ),
-'created'     => isset( $event['DTSTAMP'] ) ? strtotime( $event['DTSTAMP'] ) : time(),
-'changed'     => isset( $event['LAST-MODIFIED'] ) ? strtotime( $event['LAST-MODIFIED'] ) : time(),
-'start'       => strtotime( $event['DTSTART'] ),
-'end'         => strtotime( $event['DTEND'] ),
-'summary'     => $event['SUMMARY'] ?? '',
-'description' => $event['DESCRIPTION'] ?? '',
-];
-}
+    if ( array_key_exists( $normalized, $event ) ) {
+        return $event[ $normalized ];
+    }
 
-return $events;
+    foreach ( $event as $key => $value ) {
+        if ( $this->normalize_property_name( (string) $key ) === $normalized ) {
+            return $value;
+        }
+    }
+
+    return null;
 }
 
 private function escape_line( string $line ): string {
