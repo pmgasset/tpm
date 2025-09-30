@@ -1,7 +1,38 @@
-(function () {
+(function (window, document) {
+    'use strict';
+
+
+    if (window.vrspBookingWidget && typeof window.vrspBookingWidget.refresh === 'function') {
+        window.vrspBookingWidget.refresh();
+        return;
+    }
+
     const INIT_RETRY_LIMIT = 20;
     const INIT_RETRY_DELAY = 150;
+    const SELECTOR_DEFAULTS = {
+        form: '[data-vrsp="form"], .vrsp-form',
+        quote: '[data-vrsp="quote"], .vrsp-quote',
+        message: '[data-vrsp="message"], .vrsp-message',
+        submit: '[data-vrsp="submit"], .vrsp-form__submit',
+        continueButton: '[data-vrsp="continue"], .vrsp-form__continue',
+        availability: '[data-vrsp="availability"], .vrsp-availability',
+        availabilityCalendar: '[data-vrsp="calendar"], .vrsp-availability__calendar',
+        rateList: '[data-vrsp="rate-list"], .vrsp-availability__rate-list',
+    };
+
     let initAttempts = 0;
+    const widgetState = new WeakMap();
+
+    const getText = (listingData, key, fallback) => {
+        if (listingData && listingData.i18n && listingData.i18n[key]) {
+            return listingData.i18n[key];
+        }
+
+        return fallback;
+    };
+
+    const formatCurrencyFactory = (currency) => {
+        return (amount) => {
 
     const setupWidget = (widget, listingData) => {
         if (!widget || widget.dataset.vrspReady === 'true') {
@@ -71,9 +102,42 @@
 
         const formatCurrency = (amount) => {
 
+
             const value = Number(amount || 0);
             return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
         };
+    };
+
+
+    const clearChildren = (node) => {
+        if (!node) {
+            return;
+        }
+
+        while (node.firstChild) {
+            node.removeChild(node.firstChild);
+        }
+    };
+
+    const renderAvailability = (state, data) => {
+        const { availabilityCalendar, rateList, listingData, formatCurrency } = state;
+
+        if (availabilityCalendar) {
+            clearChildren(availabilityCalendar);
+
+            const blocked = Array.isArray(data?.blocked) ? data.blocked : [];
+
+            if (blocked.length === 0) {
+                const empty = document.createElement('p');
+                empty.textContent = getText(listingData, 'availabilityEmpty', 'Your preferred dates are open!');
+                availabilityCalendar.appendChild(empty);
+            } else {
+                blocked.slice(0, 8).forEach((event) => {
+                    const tag = document.createElement('span');
+                    tag.className = 'vrsp-availability__tag';
+                    tag.textContent = `${event.start} → ${event.end}`;
+                    availabilityCalendar.appendChild(tag);
+                });
 
 
         var renderBlocked = (blocked) => {
@@ -121,15 +185,25 @@
             rateListEl.innerHTML = '';
             if (!Array.isArray(rates) || rates.length === 0) {
                 return;
-            }
 
+            }
+        }
+
+        if (rateList) {
+            clearChildren(rateList);
+            const rates = Array.isArray(data?.rates) ? data.rates : [];
             rates.slice(0, 6).forEach((rate) => {
                 const pill = document.createElement('span');
                 pill.className = 'rate-pill';
                 pill.textContent = `${rate.date}: ${formatCurrency(rate.amount)}`;
                 rateListEl.appendChild(pill);
             });
-        };
+        }
+    };
+
+
+    const populateQuote = (state, quote) => {
+        const { widget, quotePanel, formatCurrency, listingData } = state;
 
         var populateQuote = (quote) => {
             if (!quote) {
@@ -137,31 +211,22 @@
                 return;
             }
 
-            quotePanel.hidden = false;
-            if (!quotePanel.hasAttribute('tabindex')) {
-                quotePanel.setAttribute('tabindex', '-1');
-            }
-            widget.querySelector('[data-quote="nights"]').textContent = quote.nights;
-            widget.querySelector('[data-quote="subtotal"]').textContent = formatCurrency(quote.subtotal);
-            const taxes = Number(quote.taxes || 0) + Number(quote.cleaning_fee || 0) + Number(quote.damage_fee || 0);
-            widget.querySelector('[data-quote="taxes"]').textContent = formatCurrency(taxes);
-            widget.querySelector('[data-quote="total"]').textContent = formatCurrency(quote.total);
-            widget.querySelector('[data-quote="deposit"]').textContent = formatCurrency(quote.deposit);
 
-            const balanceRow = widget.querySelector('[data-quote="balance-row"]');
-            if (balanceRow) {
-                if (quote.deposit >= quote.total) {
-                    balanceRow.style.display = 'none';
-                    widget.querySelector('[data-quote="note"]').textContent = window.vrspListing?.i18n?.fullBalanceNote ||
-                        'Your stay begins soon, so the full balance is due today.';
-                } else {
-                    balanceRow.style.display = '';
-                    widget.querySelector('[data-quote="balance"]').textContent = formatCurrency(quote.balance);
-                    widget.querySelector('[data-quote="note"]').textContent = window.vrspListing?.i18n?.depositNote ||
-                        'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.';
-                }
-            }
-        };
+        if (!quotePanel || !widget) {
+            return;
+        }
+
+
+        if (!quote) {
+            quotePanel.hidden = true;
+            return;
+        }
+
+        quotePanel.hidden = false;
+
+        if (!quotePanel.hasAttribute('tabindex')) {
+            quotePanel.setAttribute('tabindex', '-1');
+        }
 
         var collectPayload = () => ({
             arrival: form.arrival.value,
@@ -183,22 +248,54 @@
                 return;
             }
 
-            message.className = 'vrsp-message';
-            message.textContent = '';
+
+        const write = (attr, value) => {
+            const target = widget.querySelector(`[data-quote="${attr}"]`);
+            if (target) {
+                target.textContent = value;
+            }
         };
+
+
+        write('nights', quote.nights);
+        write('subtotal', formatCurrency(quote.subtotal));
+        const taxes = Number(quote.taxes || 0) + Number(quote.cleaning_fee || 0) + Number(quote.damage_fee || 0);
+        write('taxes', formatCurrency(taxes));
+        write('total', formatCurrency(quote.total));
+        write('deposit', formatCurrency(quote.deposit));
+
+        const balanceRow = widget.querySelector('[data-quote="balance-row"]');
+        const note = widget.querySelector('[data-quote="note"]');
 
         var setButtonState = (button, disabled) => {
             if (!button) {
                 return;
             }
 
-            button.disabled = !!disabled;
-            if (disabled) {
-                button.setAttribute('aria-disabled', 'true');
+
+        if (balanceRow && note) {
+            if (Number(quote.deposit || 0) >= Number(quote.total || 0)) {
+                balanceRow.style.display = 'none';
+                note.textContent = getText(listingData, 'fullBalanceNote', 'Your stay begins soon, so the full balance is due today.');
             } else {
-                button.removeAttribute('aria-disabled');
+                balanceRow.style.display = '';
+                write('balance', formatCurrency(quote.balance));
+                note.textContent = getText(
+                    listingData,
+                    'depositNote',
+                    'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.'
+                );
             }
-        };
+        }
+    };
+
+
+    const setButtonState = (button, disabled) => {
+        if (!button) {
+            return;
+        }
+
+        button.disabled = !!disabled;
 
         var getGenericError = () =>
             listingData?.i18n?.genericError || 'Unable to process booking. Please try again.';
@@ -208,22 +305,156 @@
                 return;
             }
 
-            fetch(`${listingData.api}/availability`)
-                .then((res) => res.json())
-                .then((data) => {
-                    if (!data || typeof data !== 'object') {
-                        renderBlocked([]);
-                        renderRates([]);
-                        return;
-                    }
 
-                    renderBlocked(data.blocked || []);
-                    renderRates(data.rates || []);
-                })
-                .catch(() => {
-                    // Keep silent if availability fails.
-                });
-        };
+        if (disabled) {
+            button.setAttribute('aria-disabled', 'true');
+        } else {
+            button.removeAttribute('aria-disabled');
+        }
+    };
+
+
+    const resetMessage = (message) => {
+        if (!message) {
+            return;
+        }
+
+        message.className = 'vrsp-message';
+        message.textContent = '';
+    };
+
+    const setMessage = (state, type, text) => {
+        const { message } = state;
+
+        if (!message) {
+            return;
+        }
+
+        resetMessage(message);
+        message.classList.add(type);
+        message.textContent = text;
+    };
+
+    const collectPayload = (form) => ({
+        arrival: form?.arrival?.value || '',
+        departure: form?.departure?.value || '',
+        guests: form?.guests?.value || '',
+        coupon: form?.coupon?.value || '',
+        first_name: form?.first_name?.value || '',
+        last_name: form?.last_name?.value || '',
+        email: form?.email?.value || '',
+        phone: form?.phone?.value || '',
+    });
+
+    const hasQuoteRequirements = (payload) =>
+        Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
+
+    const getGenericError = (listingData) => getText(listingData, 'genericError', 'Unable to process booking. Please try again.');
+
+    const requestAvailability = (state) => {
+        const { listingData } = state;
+
+        if (!listingData?.api) {
+            renderAvailability(state, {});
+            return;
+        }
+
+        fetch(`${listingData.api}/availability`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (!data || typeof data !== 'object') {
+                    renderAvailability(state, {});
+                    return;
+                }
+
+                renderAvailability(state, data);
+            })
+            .catch(() => {
+                renderAvailability(state, {});
+            });
+    };
+
+    const handleQuoteResponse = (state, payload, currentId, quote) => {
+        if (currentId !== state.quoteRequestId) {
+            return;
+        }
+
+        if (quote?.error) {
+            throw new Error(quote.error);
+        }
+
+        state.latestPayload = payload;
+        populateQuote(state, quote);
+        setButtonState(state.continueButton, false);
+        setMessage(state, 'success', getText(state.listingData, 'quoteReady', 'Quote ready! Review the details before continuing to payment.'));
+    };
+
+    const requestQuote = (state) => {
+        const { form, listingData } = state;
+
+        if (state.quoteDebounceId) {
+            window.clearTimeout(state.quoteDebounceId);
+            state.quoteDebounceId = null;
+        }
+
+        const payload = collectPayload(form);
+
+        resetMessage(state.message);
+
+        if (!hasQuoteRequirements(payload)) {
+            state.latestPayload = null;
+            populateQuote(state, null);
+            setButtonState(state.continueButton, true);
+            setButtonState(state.submitButton, false);
+            setMessage(state, 'info', getText(state.listingData, 'quotePrompt', 'Enter your trip details to see an instant quote.'));
+
+            if (state.quoteController) {
+                state.quoteController.abort();
+                state.quoteController = null;
+            }
+
+            return;
+        }
+
+        if (!listingData?.api) {
+            state.latestPayload = null;
+            populateQuote(state, null);
+            setButtonState(state.continueButton, true);
+            setButtonState(state.submitButton, false);
+            setMessage(state, 'error', getGenericError(listingData));
+            return;
+        }
+
+        setButtonState(state.continueButton, true);
+        setButtonState(state.submitButton, true);
+        setMessage(state, 'info', getText(listingData, 'quoteLoading', 'Fetching your quote…'));
+
+        if (state.quoteController) {
+            state.quoteController.abort();
+        }
+
+        state.quoteController = new AbortController();
+        const currentId = ++state.quoteRequestId;
+
+        fetch(`${listingData.api}/quote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: state.quoteController.signal,
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(getGenericError(listingData));
+                }
+
+                return response.json();
+            })
+            .then((quote) => {
+                handleQuoteResponse(state, payload, currentId, quote);
+            })
+            .catch((error) => {
+                if (error?.name === 'AbortError') {
+                    return;
 
 
         var latestPayload = null;
@@ -463,9 +694,65 @@
                 if (message) {
                     message.classList.add('error');
                     message.textContent = getGenericError();
+
                 }
-                return;
-            }
+
+
+                if (currentId !== state.quoteRequestId) {
+                    return;
+                }
+
+                state.latestPayload = null;
+                populateQuote(state, null);
+                setButtonState(state.continueButton, true);
+                setMessage(state, 'error', error?.message || getGenericError(listingData));
+            })
+            .finally(() => {
+                if (currentId === state.quoteRequestId) {
+                    state.quoteController = null;
+                    setButtonState(state.submitButton, false);
+                }
+            });
+    };
+
+    const scheduleQuote = (state) => {
+        if (state.quoteDebounceId) {
+            window.clearTimeout(state.quoteDebounceId);
+        }
+
+        state.quoteDebounceId = window.setTimeout(() => {
+            state.quoteDebounceId = null;
+            requestQuote(state);
+        }, 350);
+    };
+
+    const handleContinue = (state) => {
+        const { latestPayload, listingData } = state;
+
+        if (!latestPayload) {
+            setMessage(state, 'info', getText(listingData, 'quoteRequired', 'Request a quote before continuing to secure payment.'));
+            return;
+        }
+
+        setButtonState(state.continueButton, true);
+        setButtonState(state.submitButton, true);
+        setMessage(state, 'info', getText(listingData, 'checkoutPreparing', 'Preparing secure checkout…'));
+
+        if (!listingData?.api) {
+            setButtonState(state.continueButton, false);
+            setButtonState(state.submitButton, false);
+            setMessage(state, 'error', getGenericError(listingData));
+            return;
+        }
+
+        fetch(`${listingData.api}/booking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(latestPayload),
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(getGenericError(listingData));
 
 
             setButtonState(continueButton, true);
@@ -637,6 +924,7 @@
                     message.classList.add('error');
                     message.textContent = getGenericError();
 
+
                 }
                 return;
             }
@@ -651,22 +939,86 @@
 
             }
 
-
-            if (!listingData.api) {
-                setButtonState(continueButton, false);
-                setButtonState(submitButton, false);
-                if (message) {
-                    message.classList.add('error');
-                    message.textContent = getGenericError();
-                }
-                return;
-            }
-
-            fetch(`${listingData.api}/booking`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(latestPayload),
+                return response.json();
             })
+            .then((result) => {
+                if (result?.error) {
+                    throw new Error(result.error);
+                }
+
+                setMessage(state, 'success', getText(listingData, 'redirecting', 'Redirecting to secure checkout…'));
+
+                if (result?.checkout_url) {
+                    window.location.href = result.checkout_url;
+                }
+            })
+
+            .catch((error) => {
+                setButtonState(state.continueButton, false);
+                setButtonState(state.submitButton, false);
+                setMessage(state, 'error', error?.message || getGenericError(listingData));
+            })
+            .finally(() => {
+                setButtonState(state.submitButton, false);
+
+                if (state.latestPayload) {
+                    setButtonState(state.continueButton, false);
+                }
+            });
+    };
+
+    const normalizeSelectors = (listingData) => {
+        const overrides = (listingData && listingData.selectors) || {};
+        const selectors = {};
+
+        Object.keys(SELECTOR_DEFAULTS).forEach((key) => {
+            selectors[key] = overrides[key] || SELECTOR_DEFAULTS[key];
+        });
+
+        return selectors;
+    };
+
+    const mountWidget = (widget, listingData) => {
+        if (!widget || widgetState.has(widget)) {
+            return;
+        }
+
+        const selectors = normalizeSelectors(listingData);
+
+        const form = widget.querySelector(selectors.form);
+        const quotePanel = widget.querySelector(selectors.quote);
+        const message = widget.querySelector(selectors.message);
+        const submitButton = widget.querySelector(selectors.submit);
+        const continueButton = widget.querySelector(selectors.continueButton);
+        const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
+        const rateList = widget.querySelector(selectors.rateList);
+
+        if (!form || !quotePanel || !continueButton || !availability) {
+            return;
+        }
+
+        const currency = availability.getAttribute('data-currency') || listingData?.currency || 'USD';
+        const formatCurrency = formatCurrencyFactory(currency);
+
+        const state = {
+            widget,
+            listingData,
+            selectors,
+            form,
+            quotePanel,
+            message,
+            submitButton,
+            continueButton,
+            availability,
+            availabilityCalendar,
+            rateList,
+            formatCurrency,
+            quoteController: null,
+            quoteDebounceId: null,
+            quoteRequestId: 0,
+            latestPayload: null,
+
                 .then((res) => {
                     if (!res.ok) {
                         throw new Error(getGenericError());
@@ -703,9 +1055,31 @@
                         setButtonState(continueButton, false);
                     }
                 });
+
         };
 
-        loadAvailability();
+        widgetState.set(widget, state);
+
+
+        requestAvailability(state);
+        scheduleQuote(state);
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+        });
+
+        const handleChange = () => {
+            state.latestPayload = null;
+            populateQuote(state, null);
+            setButtonState(state.continueButton, true);
+            resetMessage(state.message);
+            scheduleQuote(state);
+        };
+
+        form.addEventListener('input', handleChange);
+        form.addEventListener('change', handleChange);
+
+        continueButton.addEventListener('click', () => handleContinue(state));
 
         if (form) {
 
@@ -787,29 +1161,39 @@
 
 
 
+
         widget.dataset.vrspReady = 'true';
     };
 
-    const init = () => {
+    const init = (isRefresh) => {
         const listingData = window.vrspListing;
-        const widgets = document.querySelectorAll('.vrsp-booking-widget');
+        const widgets = document.querySelectorAll('[data-vrsp-widget], .vrsp-booking-widget');
 
         if (!widgets.length || typeof listingData === 'undefined') {
-            if (initAttempts < INIT_RETRY_LIMIT) {
+            if (!isRefresh && initAttempts < INIT_RETRY_LIMIT) {
                 initAttempts += 1;
-                window.setTimeout(init, INIT_RETRY_DELAY);
+                window.setTimeout(() => init(false), INIT_RETRY_DELAY);
             }
             return;
         }
 
         widgets.forEach((widget) => {
-            setupWidget(widget, listingData);
+            mountWidget(widget, listingData);
         });
     };
 
+
+    window.vrspBookingWidget = {
+        init,
+        refresh() {
+            init(true);
+        },
+    };
+
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init, { once: true });
+        document.addEventListener('DOMContentLoaded', () => init(false), { once: true });
     } else {
-        init();
+        init(false);
     }
-})();
+})(window, document);
