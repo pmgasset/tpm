@@ -164,21 +164,74 @@
             return null;
         }
 
-        var parts = value.split('-');
-        if (parts.length < 3) {
+        var normalized = value.trim();
+        if (!normalized) {
             return null;
         }
 
-        var year = Number(parts[0]);
-        var month = Number(parts[1]) - 1;
-        var day = Number(parts[2]);
+        var separators = ['-', '/', '.'];
+        var parts = null;
+        var separator = '';
+
+        for (var i = 0; i < separators.length; i += 1) {
+            var token = separators[i];
+            if (normalized.indexOf(token) !== -1) {
+                parts = normalized.split(token);
+                separator = token;
+                break;
+            }
+        }
+
+        if (!parts || parts.length < 3) {
+            return null;
+        }
+
+        var year = 0;
+        var month = 0;
+        var day = 0;
+
+        if (parts[0].length === 4) {
+            year = Number(parts[0]);
+            month = Number(parts[1]);
+            day = Number(parts[2]);
+        } else if (parts[2].length === 4) {
+            year = Number(parts[2]);
+            month = Number(parts[0]);
+            day = Number(parts[1]);
+        } else {
+            return null;
+        }
 
         if (isNaN(year) || isNaN(month) || isNaN(day)) {
             return null;
         }
 
+        if (separator === '.') {
+            // European day.month.year ordering.
+            var maybeYearFirst = parts[0].length === 4;
+            if (!maybeYearFirst) {
+                year = Number(parts[2]);
+                month = Number(parts[1]);
+                day = Number(parts[0]);
+
+                if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                    return null;
+                }
+            }
+        }
+
+        month -= 1;
+
         var date = new Date(year, month, day);
         if (isNaN(date.getTime())) {
+            return null;
+        }
+
+        if (
+            date.getFullYear() !== year ||
+            date.getMonth() !== month ||
+            date.getDate() !== day
+        ) {
             return null;
         }
 
@@ -188,7 +241,7 @@
     function formatDate(value) {
         var date = parseISODate(value);
         if (!date) {
-            return '—';
+            return value ? value : '—';
         }
 
         try {
@@ -198,7 +251,7 @@
                 year: 'numeric'
             });
         } catch (error) {
-            return value;
+            return value || '—';
         }
     }
 
@@ -949,7 +1002,7 @@
         refresh: function () {
             init(true);
         },
-        version: '1.3.0'
+        version: '1.3.1'
     };
 
     if (document.readyState === 'loading') {
