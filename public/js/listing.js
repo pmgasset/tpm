@@ -32,6 +32,7 @@
         return fallback;
     }
 
+
     function formatCurrencyFactory(currency) {
         return function formatCurrency(amount) {
             var value = Number(amount || 0);
@@ -79,7 +80,6 @@
                     tag.textContent = event.start + ' → ' + event.end;
                     availabilityCalendar.appendChild(tag);
                 }
-
             }
         }
 
@@ -88,10 +88,7 @@
             var rates = [];
             if (data && Array.isArray(data.rates)) {
                 rates = data.rates;
-
             }
-        }
-
 
             var maxRates = Math.min(rates.length, 6);
             for (var j = 0; j < maxRates; j += 1) {
@@ -139,7 +136,6 @@
             }
         }
 
-
         write('nights', quote.nights);
         write('subtotal', formatCurrency(quote.subtotal));
         var taxes = Number(quote.taxes || 0) + Number(quote.cleaning_fee || 0) + Number(quote.damage_fee || 0);
@@ -153,7 +149,11 @@
         if (balanceRow && note) {
             if (Number(quote.deposit || 0) >= Number(quote.total || 0)) {
                 balanceRow.style.display = 'none';
-                note.textContent = getText(listingData, 'fullBalanceNote', 'Your stay begins soon, so the full balance is due today.');
+                note.textContent = getText(
+                    listingData,
+                    'fullBalanceNote',
+                    'Your stay begins soon, so the full balance is due today.'
+                );
             } else {
                 balanceRow.style.display = '';
                 write('balance', formatCurrency(quote.balance));
@@ -162,11 +162,9 @@
                     'depositNote',
                     'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.'
                 );
-
             }
         }
     }
-
 
     function setButtonState(button, disabled) {
         if (!button) {
@@ -340,6 +338,7 @@
         state.quoteRequestId += 1;
         var currentId = state.quoteRequestId;
 
+
         var fetchOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -357,14 +356,17 @@
                 }
 
                 return response.json();
+
             })
             .then(function (quote) {
                 handleQuoteResponse(state, payload, currentId, quote);
             })
+
             .catch(function (error) {
                 if (supportsAbortController && error && error.name === 'AbortError') {
                     return;
                 }
+
 
                 if (currentId !== state.quoteRequestId) {
                     return;
@@ -379,13 +381,11 @@
                 if (currentId === state.quoteRequestId) {
                     if (supportsAbortController) {
                         state.quoteController = null;
-
                     }
                     setButtonState(state.submitButton, false);
                 }
             });
     }
-
 
     function scheduleQuote(state) {
         if (state.quoteDebounceId) {
@@ -492,11 +492,9 @@
                 var extra = continueButtons[i];
                 if (extra && extra.parentNode) {
                     extra.parentNode.removeChild(extra);
-
                 }
             }
         }
-
 
         if (!form || !quotePanel || !continueButton || !availability) {
             return;
@@ -522,11 +520,9 @@
             quoteDebounceId: null,
             quoteRequestId: 0,
             latestPayload: null
-
         };
 
         widgetState.set(widget, state);
-
 
         requestAvailability(state);
         scheduleQuote(state);
@@ -536,7 +532,6 @@
         });
 
         var handleChange = function () {
-
             state.latestPayload = null;
             populateQuote(state, null);
             setButtonState(state.continueButton, true);
@@ -547,15 +542,12 @@
         form.addEventListener('input', handleChange);
         form.addEventListener('change', handleChange);
 
-
         continueButton.addEventListener('click', function () {
             handleContinue(state);
         });
 
-
         widget.dataset.vrspReady = 'true';
     }
-
 
     function init(isRefresh) {
         var listingData = window.vrspListing;
@@ -575,10 +567,12 @@
         }
 
 
+
         for (var i = 0; i < widgets.length; i += 1) {
             mountWidget(widgets[i], listingData);
         }
     }
+
 
     window.vrspBookingWidget = {
         init: init,
@@ -586,7 +580,6 @@
             init(true);
         },
         version: '1.1.0'
-
     };
 
     if (document.readyState === 'loading') {

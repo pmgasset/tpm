@@ -3,9 +3,7 @@
  * Plugin Name:       VR Single Property
  * Plugin URI:        https://example.com/vr-single-property
  * Description:       Single-property vacation rental system with booking, payments, dynamic pricing, and operations automations.
-
  * Version:           0.1.5
-
  * Author:            VR Single Property
  * Author URI:        https://example.com
  * Text Domain:       vr-single-property

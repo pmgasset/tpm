@@ -63,7 +63,6 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
                 </label>
             </div>
             <div class="vrsp-form__actions">
-
                 <button type="button" class="vrsp-form__continue" data-vrsp="continue" disabled><?php esc_html_e( 'Continue to Secure Payment', 'vr-single-property' ); ?></button>
 
             </div>
