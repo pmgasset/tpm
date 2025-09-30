@@ -23,6 +23,8 @@
         if (listingData && listingData.i18n && listingData.i18n[key]) {
             return listingData.i18n[key];
         }
+        return fallback;
+    }
 
         return fallback;
     }
