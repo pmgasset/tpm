@@ -288,6 +288,48 @@
         if (continueButton) {
             continueButton.addEventListener('click', handleContinue);
         }
+
+        fetch(`${vrspListing.api}/booking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(latestPayload),
+        })
+            .then((res) => {
+                if (!res.ok) {
+                    throw new Error(window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.');
+                }
+
+                return res.json();
+            })
+            .then((response) => {
+                if (response.error) {
+                    throw new Error(response.error);
+                }
+
+                if (message) {
+                    message.classList.add('success');
+                    message.textContent = window.vrspListing.i18n?.redirecting || 'Redirecting to secure checkout…';
+                }
+
+                if (response.checkout_url) {
+                    window.location.href = response.checkout_url;
+                }
+            })
+            .catch((error) => {
+                setButtonState(continueButton, false);
+                setButtonState(submitButton, false);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = error.message || window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.';
+                }
+            })
+            .finally(() => {
+                setButtonState(submitButton, false);
+                if (latestPayload) {
+                    setButtonState(continueButton, false);
+                }
+            });
+
     };
 
     if (document.readyState === 'loading') {
