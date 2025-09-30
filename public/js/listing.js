@@ -19,6 +19,19 @@
             rateList: listingData?.selectors?.rateList || '.vrsp-availability__rate-list',
         };
 
+
+        const form = widget.querySelector(selectors.form);
+        const quotePanel = widget.querySelector(selectors.quote);
+        const message = widget.querySelector(selectors.message);
+        const submitButton = widget.querySelector(selectors.submit);
+        const continueButton = widget.querySelector(selectors.continueButton);
+        const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
+        const rateListEl = widget.querySelector(selectors.rateList);
+        const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
+        const rateList = widget.querySelector(selectors.rateList);
+
+
         const form = widget.querySelector(selectors.form);
         const quotePanel = widget.querySelector(selectors.quote);
         const message = widget.querySelector(selectors.message);
@@ -41,6 +54,10 @@
 
         const renderBlocked = (blocked) => {
             if (!availabilityCalendarEl) {
+
+
+            if (!availabilityCalendar) {
+
                 return;
             }
 
@@ -174,6 +191,7 @@
         let quoteController = null;
         let quoteRequestId = 0;
 
+
         const hasQuoteRequirements = (payload) =>
             Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
 
@@ -219,6 +237,21 @@
                 latestPayload = null;
                 populateQuote(null);
                 setButtonState(continueButton, true);
+
+        const handleQuote = (event) => {
+            event.preventDefault();
+            resetMessage();
+            latestPayload = null;
+            setButtonState(continueButton, true);
+
+            const payload = collectPayload();
+
+            populateQuote(null);
+
+            setButtonState(submitButton, true);
+
+            if (!listingData.api) {
+
                 setButtonState(submitButton, false);
                 if (message) {
                     message.classList.add('error');
@@ -226,6 +259,7 @@
                 }
                 return;
             }
+
 
             setButtonState(continueButton, true);
             setButtonState(submitButton, true);
@@ -246,6 +280,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
+
                 signal: quoteController.signal,
             })
                 .then((res) => {
@@ -268,8 +303,12 @@
                     latestPayload = payload;
                     setButtonState(continueButton, false);
                     if (message) {
+
                         resetMessage();
                         message.classList.add('success');
+
+                        message.classList.add('info');
+
                         message.textContent = listingData?.i18n?.quoteReady ||
                             'Quote ready! Review the details before continuing to payment.';
                     }
@@ -283,26 +322,36 @@
                         return;
                     }
 
+
                     latestPayload = null;
                     populateQuote(null);
                     setButtonState(continueButton, true);
                     if (message) {
+
                         resetMessage();
+
+
                         message.classList.add('error');
                         message.textContent = error.message || getGenericError();
                     }
                 })
                 .finally(() => {
+
                     if (currentRequestId === quoteRequestId) {
                         quoteController = null;
                         setButtonState(submitButton, false);
                     }
+
+                    setButtonState(submitButton, false);
+
                 });
         };
 
         const handleContinue = () => {
             if (!continueButton) {
                 return;
+
+
             }
 
             if (!latestPayload) {
@@ -310,7 +359,7 @@
                 if (message) {
                     message.classList.add('info');
                     message.textContent = listingData?.i18n?.quoteRequired ||
-                        'We need to finish building your quote before continuing to secure payment.';
+                        'Request a quote before continuing to secure payment.';
                 }
                 return;
             }
@@ -321,6 +370,32 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
+            }
+
+            if (!listingData.api) {
+                setButtonState(continueButton, false);
+                setButtonState(submitButton, false);
+                if (message) {
+
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quoteRequired ||
+                        'We need to finish building your quote before continuing to secure payment.';
+
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+
+                }
+                return;
+            }
+
+            resetMessage();
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
             }
 
             if (!listingData.api) {
@@ -379,6 +454,7 @@
         loadAvailability();
 
         if (form) {
+
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
             });
@@ -403,6 +479,24 @@
         }
 
         scheduleQuote();
+
+            form.addEventListener('submit', handleQuote);
+            form.addEventListener('input', () => {
+                if (!latestPayload) {
+                    return;
+                }
+
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+            });
+        }
+
+        if (continueButton) {
+            continueButton.addEventListener('click', handleContinue);
+        }
+
 
         widget.dataset.vrspReady = 'true';
     };
