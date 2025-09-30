@@ -6,7 +6,6 @@
 
  * Version:           0.1.4
 
- * Version:           0.1.3
 
  * Author:            VR Single Property
  * Author URI:        https://example.com
