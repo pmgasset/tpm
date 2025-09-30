@@ -135,9 +135,15 @@ $this->refresh();
 /**
  * Sanitise settings input.
  */
-public function sanitize( array $settings ): array {
-$defaults = $this->get_defaults();
-$output   = [];
+    public function sanitize( array $settings ): array {
+        $defaults = $this->get_defaults();
+        $stored   = get_option( self::OPTION_KEY, [] );
+
+        if ( ! is_array( $stored ) ) {
+            $stored = [];
+        }
+
+        $output = [];
 
         foreach ( $defaults as $key => $default ) {
             if ( ! array_key_exists( $key, $settings ) ) {
@@ -180,9 +186,11 @@ case 'ical_import_urls':
 $urls = is_string( $value ) ? preg_split( "/\r?\n/", $value ) : (array) $value;
 $output[ $key ] = array_filter( array_map( 'esc_url_raw', $urls ) );
 break;
-case 'business_rules':
-$output[ $key ] = wp_parse_args( array_map( 'sanitize_text_field', (array) $value ), $defaults['business_rules'] );
-break;
+            case 'business_rules':
+                $existing        = isset( $stored['business_rules'] ) && is_array( $stored['business_rules'] ) ? $stored['business_rules'] : [];
+                $sanitized_rules = array_map( 'sanitize_text_field', (array) $value );
+                $output[ $key ]  = array_merge( $existing, $sanitized_rules );
+                break;
         case 'coupons':
             $coupons = array_map(
                 function ( $coupon ) {
@@ -201,12 +209,14 @@ break;
             );
             break;
             case 'email_templates':
+                $existing       = isset( $stored['email_templates'] ) && is_array( $stored['email_templates'] ) ? $stored['email_templates'] : [];
                 $templates      = array_map( 'wp_kses_post', (array) $value );
-                $output[ $key ] = array_merge( $defaults['email_templates'], $templates );
+                $output[ $key ] = array_merge( $existing, $templates );
                 break;
             case 'sms_templates':
+                $existing       = isset( $stored['sms_templates'] ) && is_array( $stored['sms_templates'] ) ? $stored['sms_templates'] : [];
                 $templates      = array_map( 'sanitize_textarea_field', (array) $value );
-                $output[ $key ] = array_merge( $defaults['sms_templates'], $templates );
+                $output[ $key ] = array_merge( $existing, $templates );
                 break;
             case 'checkin_email':
                 $output[ $key ] = sanitize_email( $value );
@@ -218,11 +228,14 @@ break;
 
     $output['currency'] = 'USD';
 
-    $codes = isset( $output['coupons'] ) ? wp_list_pluck( (array) $output['coupons'], 'code' ) : [];
-    $this->sync_coupon_usage_codes( $codes );
+        $merged = array_replace_recursive( $stored, $output );
+        $final  = wp_parse_args( $merged, $defaults );
 
-    return wp_parse_args( $output, $defaults );
-}
+        $codes = isset( $final['coupons'] ) ? wp_list_pluck( (array) $final['coupons'], 'code' ) : [];
+        $this->sync_coupon_usage_codes( $codes );
+
+        return $final;
+    }
 
 /**
  * Retrieve pricing tiers.
