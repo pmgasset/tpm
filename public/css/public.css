@@ -60,33 +60,59 @@
     font-size: 0.85rem;
 }
 
-.vrsp-availability__rates h3 {
-    margin: 0 0 0.25rem;
+.vrsp-availability__details {
+    display: grid;
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+
+.vrsp-availability__dates h3,
+.vrsp-availability__pricing h3 {
+    margin: 0 0 0.5rem;
     font-size: 1rem;
     font-weight: 600;
     color: #1f2937;
 }
 
-.vrsp-availability__base {
-    margin: 0 0 0.75rem;
-    color: #475569;
-    font-size: 0.9rem;
+.vrsp-availability__dates dl,
+.vrsp-availability__pricing dl {
+    margin: 0;
+    display: grid;
+    gap: 0.65rem;
 }
 
-.vrsp-availability__rate-list {
+.vrsp-availability__dates dl div,
+.vrsp-availability__pricing dl div {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 12px;
+    background: rgba(148, 163, 184, 0.12);
+    color: #0f172a;
 }
 
-.vrsp-availability__rate-list .rate-pill {
-    display: inline-flex;
-    padding: 0.4rem 0.75rem;
-    border-radius: 12px;
-    background: #0f172a;
-    color: #e2e8f0;
+.vrsp-availability__dates dt,
+.vrsp-availability__pricing dt {
+    margin: 0;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.vrsp-availability__dates dd,
+.vrsp-availability__pricing dd {
+    margin: 0;
+    font-size: 1rem;
     font-weight: 600;
-    font-size: 0.85rem;
+    color: #0f172a;
+}
+
+.vrsp-availability__note {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+    color: #475569;
 }
 
 .vrsp-form__grid {
@@ -115,6 +141,40 @@
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
     outline: none;
+}
+
+.vrsp-form__payment {
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.vrsp-form__payment legend {
+    font-weight: 700;
+    color: #0f172a;
+    padding: 0 0.25rem;
+}
+
+.vrsp-form__payment label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.vrsp-form__payment input[type='radio'] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: #2563eb;
+}
+
+.vrsp-form__payment-note {
+    margin: 0.25rem 0 0;
+    font-size: 0.9rem;
+    color: #475569;
 }
 
 .vrsp-form__actions {
@@ -245,6 +305,11 @@
 
     .vrsp-card--form {
         grid-column: span 1;
+    }
+
+    .vrsp-availability__details {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
     }
 }
 
