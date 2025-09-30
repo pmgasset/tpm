@@ -8,7 +8,11 @@
             return;
         }
 
+
         var selectors = {
+
+        const selectors = {
+
             form: listingData?.selectors?.form || '.vrsp-form',
             quote: listingData?.selectors?.quote || '.vrsp-quote',
             message: listingData?.selectors?.message || '.vrsp-message',
@@ -19,6 +23,7 @@
             rateList: listingData?.selectors?.rateList || '.vrsp-availability__rate-list',
         };
 
+
         var form = widget.querySelector(selectors.form);
         var quotePanel = widget.querySelector(selectors.quote);
         var message = widget.querySelector(selectors.message);
@@ -28,19 +33,62 @@
         var availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
         var rateListEl = widget.querySelector(selectors.rateList);
 
+
+        const form = widget.querySelector(selectors.form);
+        const quotePanel = widget.querySelector(selectors.quote);
+        const message = widget.querySelector(selectors.message);
+        const submitButton = widget.querySelector(selectors.submit);
+        const continueButton = widget.querySelector(selectors.continueButton);
+        const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
+        const rateListEl = widget.querySelector(selectors.rateList);
+
+
+        const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
+        const rateList = widget.querySelector(selectors.rateList);
+
+
+        const form = widget.querySelector(selectors.form);
+        const quotePanel = widget.querySelector(selectors.quote);
+        const message = widget.querySelector(selectors.message);
+        const submitButton = widget.querySelector(selectors.submit);
+        const continueButton = widget.querySelector(selectors.continueButton);
+        const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
+        const rateListEl = widget.querySelector(selectors.rateList);
+
+
         if (!form || !quotePanel || !continueButton || !availability) {
             return;
         }
 
+
         var currency = availability.getAttribute('data-currency') || listingData.currency || 'USD';
 
         var formatCurrency = (amount) => {
+
+        const currency = availability.getAttribute('data-currency') || listingData.currency || 'USD';
+
+        const formatCurrency = (amount) => {
+
             const value = Number(amount || 0);
             return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
         };
 
+
         var renderBlocked = (blocked) => {
             if (!availabilityCalendarEl) {
+
+        const renderBlocked = (blocked) => {
+            if (!availabilityCalendarEl) {
+
+
+
+
+            if (!availabilityCalendar) {
+
+
+
                 return;
             }
 
@@ -61,7 +109,11 @@
             });
         };
 
+
         var renderRates = (rates) => {
+
+        const renderRates = (rates) => {
+
             if (!rateListEl) {
                 return;
             }
@@ -122,7 +174,11 @@
             phone: form.phone.value,
         });
 
+
         var resetMessage = () => {
+
+        const resetMessage = () => {
+
             if (!message) {
                 return;
             }
@@ -169,6 +225,7 @@
                 });
         };
 
+
         var latestPayload = null;
         var quoteDebounceId = null;
         var quoteController = null;
@@ -189,6 +246,48 @@
         };
 
         var requestQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+                quoteDebounceId = null;
+            }
+
+        let latestPayload = null;
+        let quoteDebounceId = null;
+        let quoteController = null;
+        let quoteRequestId = 0;
+
+
+        const hasQuoteRequirements = (payload) =>
+            Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
+
+        const scheduleQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+            }
+
+            quoteDebounceId = window.setTimeout(() => {
+                quoteDebounceId = null;
+                requestQuote();
+            }, 350);
+        };
+
+
+        const hasQuoteRequirements = (payload) =>
+            Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
+
+        const scheduleQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+            }
+
+            quoteDebounceId = window.setTimeout(() => {
+                quoteDebounceId = null;
+                requestQuote();
+            }, 350);
+        };
+
+
+        const requestQuote = () => {
             if (quoteDebounceId) {
                 window.clearTimeout(quoteDebounceId);
                 quoteDebounceId = null;
@@ -216,11 +315,41 @@
             }
 
             if (!listingData.api) {
+
+
+
+            const payload = collectPayload();
+
+            resetMessage();
+
+            if (!hasQuoteRequirements(payload)) {
+
                 latestPayload = null;
                 populateQuote(null);
                 setButtonState(continueButton, true);
                 setButtonState(submitButton, false);
                 if (message) {
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quotePrompt ||
+                        'Enter your trip details to see an instant quote.';
+                }
+                if (quoteController) {
+                    quoteController.abort();
+                    quoteController = null;
+                }
+                return;
+            }
+
+            if (!listingData.api) {
+
+
+
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                setButtonState(submitButton, false);
+                if (message) {
+
                     message.classList.add('error');
                     message.textContent = getGenericError();
                 }
@@ -283,26 +412,185 @@
                         return;
                     }
 
+
+
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quotePrompt ||
+                        'Enter your trip details to see an instant quote.';
+                }
+                if (quoteController) {
+                    quoteController.abort();
+                    quoteController = null;
+
+                }
+                return;
+            }
+
+
+
+            if (!listingData.api) {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+
+        const handleQuote = (event) => {
+            event.preventDefault();
+            resetMessage();
+            latestPayload = null;
+
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.quoteLoading || 'Fetching your quote…';
+            }
+
+            if (quoteController) {
+                quoteController.abort();
+            }
+
+            quoteController = new AbortController();
+            const currentRequestId = ++quoteRequestId;
+
+
+            if (!listingData.api) {
+
+                setButtonState(submitButton, false);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+                }
+                return;
+            }
+
+
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.quoteLoading || 'Fetching your quote…';
+            }
+
+            if (quoteController) {
+                quoteController.abort();
+            }
+
+            quoteController = new AbortController();
+            const currentRequestId = ++quoteRequestId;
+
+
+            fetch(`${listingData.api}/quote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+
+                signal: quoteController.signal,
+            })
+                .then((res) => {
+                    if (!res.ok) {
+                        throw new Error(getGenericError());
+                    }
+
+                    return res.json();
+                })
+                .then((quote) => {
+                    if (currentRequestId !== quoteRequestId) {
+                        return;
+                    }
+
+                    if (quote.error) {
+                        throw new Error(quote.error);
+
+                    }
+
+                    populateQuote(quote);
+                    latestPayload = payload;
+                    setButtonState(continueButton, false);
+                    if (message) {
+                        resetMessage();
+                        message.classList.add('success');
+                        message.textContent = listingData?.i18n?.quoteReady ||
+                            'Quote ready! Review the details before continuing to payment.';
+                    }
+                })
+                .catch((error) => {
+                    if (error?.name === 'AbortError') {
+                        return;
+                    }
+
+                    }
+
+                    populateQuote(quote);
+                    latestPayload = payload;
+                    setButtonState(continueButton, false);
+                    if (message) {
+
+                        resetMessage();
+                        message.classList.add('success');
+
+                        message.classList.add('info');
+
+                        message.textContent = listingData?.i18n?.quoteReady ||
+                            'Quote ready! Review the details before continuing to payment.';
+                    }
+                })
+                .catch((error) => {
+                    if (error?.name === 'AbortError') {
+                        return;
+                    }
+
+
+                    if (currentRequestId !== quoteRequestId) {
+                        return;
+                    }
+
+
+
                     latestPayload = null;
                     populateQuote(null);
                     setButtonState(continueButton, true);
                     if (message) {
+
                         resetMessage();
+
+
+                        resetMessage();
+
+
+                        resetMessage();
+
+
+
+
                         message.classList.add('error');
                         message.textContent = error.message || getGenericError();
                     }
                 })
                 .finally(() => {
+
                     if (currentRequestId === quoteRequestId) {
                         quoteController = null;
                         setButtonState(submitButton, false);
                     }
+
+
+
+                    setButtonState(submitButton, false);
+
+
                 });
         };
 
         var handleContinue = () => {
             if (!continueButton) {
                 return;
+
+
             }
 
             if (!latestPayload) {
@@ -310,7 +598,15 @@
                 if (message) {
                     message.classList.add('info');
                     message.textContent = listingData?.i18n?.quoteRequired ||
+
                         'We need to finish building your quote before continuing to secure payment.';
+
+
+                        'We need to finish building your quote before continuing to secure payment.';
+
+                        'Request a quote before continuing to secure payment.';
+
+
                 }
                 return;
             }
@@ -321,7 +617,40 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
             }
+
+
+
+
+            }
+
+            if (!listingData.api) {
+                setButtonState(continueButton, false);
+                setButtonState(submitButton, false);
+                if (message) {
+
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quoteRequired ||
+                        'We need to finish building your quote before continuing to secure payment.';
+
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+
+                }
+                return;
+            }
+
+            resetMessage();
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
+
+            }
+
 
             if (!listingData.api) {
                 setButtonState(continueButton, false);
@@ -379,6 +708,36 @@
         loadAvailability();
 
         if (form) {
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+            });
+            form.addEventListener('input', () => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+                scheduleQuote();
+            });
+            form.addEventListener('change', () => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+                scheduleQuote();
+            });
+        }
+
+
+        if (continueButton) {
+            continueButton.addEventListener('click', handleContinue);
+        }
+
+        scheduleQuote();
+
+
+
+
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
             });
@@ -403,6 +762,30 @@
         }
 
         scheduleQuote();
+
+            form.addEventListener('submit', handleQuote);
+            form.addEventListener('input', () => {
+                if (!latestPayload) {
+                    return;
+                }
+
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+            });
+        }
+
+
+        if (continueButton) {
+            continueButton.addEventListener('click', handleContinue);
+        }
+
+
+        scheduleQuote();
+
+
+
 
         widget.dataset.vrspReady = 'true';
     };
