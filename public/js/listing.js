@@ -1,6 +1,7 @@
 (function (window, document) {
     'use strict';
 
+
     if (window.vrspBookingWidget && typeof window.vrspBookingWidget.refresh === 'function') {
         window.vrspBookingWidget.refresh();
         return;
@@ -76,10 +77,11 @@
                 const pill = document.createElement('span');
                 pill.className = 'rate-pill';
                 pill.textContent = `${rate.date}: ${formatCurrency(rate.amount)}`;
-                rateList.appendChild(pill);
+                rateListEl.appendChild(pill);
             });
         }
     };
+
 
     const populateQuote = (state, quote) => {
         const { widget, quotePanel, formatCurrency, listingData } = state;
@@ -92,6 +94,7 @@
             quotePanel.hidden = true;
             return;
         }
+
 
         quotePanel.hidden = false;
 
@@ -141,6 +144,7 @@
             return;
         }
 
+
         button.disabled = !!disabled;
 
         if (disabled) {
@@ -149,6 +153,7 @@
             button.removeAttribute('aria-disabled');
         }
     };
+
 
     const resetMessage = (message) => {
         if (!message) {
@@ -181,6 +186,7 @@
         email: form?.email?.value || '',
         phone: form?.phone?.value || '',
     });
+
 
     const hasQuoteRequirements = (payload) =>
         Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
@@ -355,7 +361,9 @@
             .then((result) => {
                 if (result?.error) {
                     throw new Error(result.error);
+
                 }
+
 
                 setMessage(state, 'success', getText(listingData, 'redirecting', 'Redirecting to secure checkout…'));
 
@@ -363,6 +371,7 @@
                     window.location.href = result.checkout_url;
                 }
             })
+
             .catch((error) => {
                 setButtonState(state.continueButton, false);
                 setButtonState(state.submitButton, false);
@@ -399,6 +408,7 @@
         const quotePanel = widget.querySelector(selectors.quote);
         const message = widget.querySelector(selectors.message);
         const submitButton = widget.querySelector(selectors.submit);
+
         const continueButtons = widget.querySelectorAll(selectors.continueButton);
         const continueButton = continueButtons.length > 0 ? continueButtons[0] : null;
         const availability = widget.querySelector(selectors.availability);
@@ -412,6 +422,7 @@
                 }
             });
         }
+
 
         if (!form || !quotePanel || !continueButton || !availability) {
             return;
@@ -437,12 +448,15 @@
             quoteDebounceId: null,
             quoteRequestId: 0,
             latestPayload: null,
+
         };
 
         widgetState.set(widget, state);
 
+
         requestAvailability(state);
         scheduleQuote(state);
+
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
