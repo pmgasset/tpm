@@ -219,6 +219,51 @@
             message.textContent = window.vrspListing.i18n?.checkoutPreparing || 'Preparing secure checkout…';
         }
 
+                if (continueButton) {
+                    continueButton.focus();
+                }
+
+                if (message) {
+                    message.classList.add('info');
+                    message.textContent = window.vrspListing.i18n?.quoteReady || 'Quote ready! Review the details before continuing to payment.';
+                }
+            })
+            .catch((error) => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = error.message || window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.';
+                }
+            })
+            .finally(() => {
+                setButtonState(submitButton, false);
+            });
+    };
+
+    const handleContinue = () => {
+        if (!continueButton) {
+            return;
+        }
+
+        if (!latestPayload) {
+            resetMessage();
+            if (message) {
+                message.classList.add('info');
+                message.textContent = window.vrspListing.i18n?.quoteRequired || 'Request a quote before continuing to secure payment.';
+            }
+            return;
+        }
+
+        resetMessage();
+        setButtonState(continueButton, true);
+        setButtonState(submitButton, true);
+        if (message) {
+            message.classList.add('info');
+            message.textContent = window.vrspListing.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+        }
+
         fetch(`${vrspListing.api}/booking`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
