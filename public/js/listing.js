@@ -25,6 +25,8 @@
         const submitButton = widget.querySelector(selectors.submit);
         const continueButton = widget.querySelector(selectors.continueButton);
         const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
+        const rateListEl = widget.querySelector(selectors.rateList);
         const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
         const rateList = widget.querySelector(selectors.rateList);
 
@@ -40,16 +42,17 @@
         };
 
         const renderBlocked = (blocked) => {
+            if (!availabilityCalendarEl) {
             if (!availabilityCalendar) {
                 return;
             }
 
-            availabilityCalendar.innerHTML = '';
+            availabilityCalendarEl.innerHTML = '';
 
             if (!Array.isArray(blocked) || blocked.length === 0) {
                 const empty = document.createElement('p');
                 empty.textContent = window.vrspListing?.i18n?.availabilityEmpty || 'Your preferred dates are open!';
-                availabilityCalendar.appendChild(empty);
+                availabilityCalendarEl.appendChild(empty);
                 return;
             }
 
@@ -57,16 +60,16 @@
                 const tag = document.createElement('span');
                 tag.className = 'vrsp-availability__tag';
                 tag.textContent = `${event.start} → ${event.end}`;
-                availabilityCalendar.appendChild(tag);
+                availabilityCalendarEl.appendChild(tag);
             });
         };
 
         const renderRates = (rates) => {
-            if (!rateList) {
+            if (!rateListEl) {
                 return;
             }
 
-            rateList.innerHTML = '';
+            rateListEl.innerHTML = '';
             if (!Array.isArray(rates) || rates.length === 0) {
                 return;
             }
@@ -75,7 +78,7 @@
                 const pill = document.createElement('span');
                 pill.className = 'rate-pill';
                 pill.textContent = `${rate.date}: ${formatCurrency(rate.amount)}`;
-                rateList.appendChild(pill);
+                rateListEl.appendChild(pill);
             });
         };
 
@@ -268,6 +271,18 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+            }
+
+            if (!listingData.api) {
+                setButtonState(continueButton, false);
+                setButtonState(submitButton, false);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+                }
+                return;
+            }
+
             }
 
             if (!listingData.api) {
