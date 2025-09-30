@@ -1,3 +1,4 @@
+
 ;(function (window, document) {
     'use strict';
 
@@ -30,6 +31,7 @@
 
         return fallback;
     }
+
 
     function formatCurrencyFactory(currency) {
         return function formatCurrency(amount) {
@@ -98,6 +100,7 @@
                 pill.className = 'rate-pill';
                 pill.textContent = rate.date + ': ' + formatCurrency(rate.amount);
                 rateList.appendChild(pill);
+
             }
         }
     }
@@ -107,6 +110,7 @@
         var quotePanel = state.quotePanel;
         var formatCurrency = state.formatCurrency;
         var listingData = state.listingData;
+
 
         if (!quotePanel || !widget) {
             return;
@@ -128,6 +132,7 @@
             var target = widget.querySelector(selector);
             if (target) {
                 target.textContent = value;
+
             }
         }
 
@@ -333,6 +338,7 @@
         state.quoteRequestId += 1;
         var currentId = state.quoteRequestId;
 
+
         var fetchOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -350,14 +356,17 @@
                 }
 
                 return response.json();
+
             })
             .then(function (quote) {
                 handleQuoteResponse(state, payload, currentId, quote);
             })
+
             .catch(function (error) {
                 if (supportsAbortController && error && error.name === 'AbortError') {
                     return;
                 }
+
 
                 if (currentId !== state.quoteRequestId) {
                     return;
@@ -544,20 +553,26 @@
         var listingData = window.vrspListing;
         var widgets = document.querySelectorAll('[data-vrsp-widget], .vrsp-booking-widget');
 
+
         if (!widgets.length || typeof listingData === 'undefined') {
             if (!isRefresh && initAttempts < INIT_RETRY_LIMIT) {
                 initAttempts += 1;
+
                 window.setTimeout(function () {
                     init(false);
                 }, INIT_RETRY_DELAY);
+
             }
             return;
         }
+
+
 
         for (var i = 0; i < widgets.length; i += 1) {
             mountWidget(widgets[i], listingData);
         }
     }
+
 
     window.vrspBookingWidget = {
         init: init,
@@ -568,9 +583,11 @@
     };
 
     if (document.readyState === 'loading') {
+
         document.addEventListener('DOMContentLoaded', function () {
             init(false);
         }, { once: true });
+
     } else {
         init(false);
     }
