@@ -3,6 +3,7 @@ namespace VRSP;
 
 use function __;
 use function did_action;
+use function get_option;
 use function wp_list_pluck;
 
 /**
@@ -29,9 +30,23 @@ $this->settings = wp_parse_args( get_option( self::OPTION_KEY, [] ), $this->get_
 public function get_defaults(): array {
         $translate   = did_action( 'init' );
         $house_rules = 'No smoking. No pets. Quiet hours after 10 PM.';
+        $deposit_email_template = '<p>Hi {{first_name}},</p><p>Thanks for your reservation at {{property_name}}. We\'ve received your deposit of {{deposit_amount}} for {{arrival}} to {{departure}}.</p><p>We\'ll let you know when the remaining balance has been captured.</p>';
+        $balance_email_template = '<p>Hi {{first_name}},</p><p>Your stay at {{property_name}} from {{arrival}} to {{departure}} is now paid in full.</p><p>We\'re excited to welcome you soon!</p>';
+        $approved_email_template = '<p>Hi {{first_name}},</p><p>Your booking for {{property_name}} from {{arrival}} to {{departure}} has been approved.</p><p>We\'ll be in touch with any additional details before your arrival.</p>';
+        $checkin_email_template  = '<p>New approved booking for {{property_name}}.</p><ul><li>Guest: {{guest_name}}</li><li>Arrival: {{arrival}} ({{checkin_time}})</li><li>Departure: {{departure}} ({{checkout_time}})</li><li>Guests: {{guests}}</li><li>Email: {{email}}</li><li>Phone: {{phone}}</li><li>Total: {{total_amount}}</li><li>Deposit: {{deposit_amount}}</li><li>Balance: {{balance_amount}}</li></ul>';
+        $deposit_sms_template    = 'Hi {{first_name}}, we received your deposit of {{deposit_amount}} for {{property_name}} ({{arrival}}-{{departure}}). Thank you!';
+        $balance_sms_template    = 'Hi {{first_name}}, your stay at {{property_name}} ({{arrival}}-{{departure}}) is fully paid. See you soon!';
+        $approved_sms_template   = 'Hi {{first_name}}, your booking for {{property_name}} on {{arrival}} has been approved. We\'ll share arrival details soon.';
 
         if ( $translate && function_exists( '__' ) ) {
             $house_rules = __( 'No smoking. No pets. Quiet hours after 10 PM.', 'vr-single-property' );
+            $deposit_email_template = __( '<p>Hi {{first_name}},</p><p>Thanks for your reservation at {{property_name}}. We\'ve received your deposit of {{deposit_amount}} for {{arrival}} to {{departure}}.</p><p>We\'ll let you know when the remaining balance has been captured.</p>', 'vr-single-property' );
+            $balance_email_template = __( '<p>Hi {{first_name}},</p><p>Your stay at {{property_name}} from {{arrival}} to {{departure}} is now paid in full.</p><p>We\'re excited to welcome you soon!</p>', 'vr-single-property' );
+            $approved_email_template = __( '<p>Hi {{first_name}},</p><p>Your booking for {{property_name}} from {{arrival}} to {{departure}} has been approved.</p><p>We\'ll be in touch with any additional details before your arrival.</p>', 'vr-single-property' );
+            $checkin_email_template  = __( '<p>New approved booking for {{property_name}}.</p><ul><li>Guest: {{guest_name}}</li><li>Arrival: {{arrival}} ({{checkin_time}})</li><li>Departure: {{departure}} ({{checkout_time}})</li><li>Guests: {{guests}}</li><li>Email: {{email}}</li><li>Phone: {{phone}}</li><li>Total: {{total_amount}}</li><li>Deposit: {{deposit_amount}}</li><li>Balance: {{balance_amount}}</li></ul>', 'vr-single-property' );
+            $deposit_sms_template    = __( 'Hi {{first_name}}, we received your deposit of {{deposit_amount}} for {{property_name}} ({{arrival}}-{{departure}}). Thank you!', 'vr-single-property' );
+            $balance_sms_template    = __( 'Hi {{first_name}}, your stay at {{property_name}} ({{arrival}}-{{departure}}) is fully paid. See you soon!', 'vr-single-property' );
+            $approved_sms_template   = __( 'Hi {{first_name}}, your booking for {{property_name}} on {{arrival}} has been approved. We\'ll share arrival details soon.', 'vr-single-property' );
         }
 
         return [
@@ -64,17 +79,28 @@ public function get_defaults(): array {
 ],
 'uplift_cap'              => 0.15,
 'coupons'                 => [],
-'business_rules'          => [
-    'checkin_time'       => '16:00',
-    'checkout_time'      => '11:00',
-    'deposit_threshold'  => 7,
-    'deposit_percent'    => 0.5,
-    'cancellation_days'  => 7,
-    'house_rules'        => $house_rules,
-],
-'email_templates'         => [],
-];
-}
+            'business_rules'          => [
+                'checkin_time'       => '16:00',
+                'checkout_time'      => '11:00',
+                'deposit_threshold'  => 7,
+                'deposit_percent'    => 0.5,
+                'cancellation_days'  => 7,
+                'house_rules'        => $house_rules,
+            ],
+            'email_templates'         => [
+                'booking_deposit'  => $deposit_email_template,
+                'booking_balance'  => $balance_email_template,
+                'booking_approved' => $approved_email_template,
+                'checkin_approved' => $checkin_email_template,
+            ],
+            'sms_templates'           => [
+                'booking_deposit'  => $deposit_sms_template,
+                'booking_balance'  => $balance_sms_template,
+                'booking_approved' => $approved_sms_template,
+            ],
+            'checkin_email'           => get_option( 'admin_email', '' ),
+        ];
+    }
 
 /**
  * Return setting by key.
@@ -113,10 +139,10 @@ public function sanitize( array $settings ): array {
 $defaults = $this->get_defaults();
 $output   = [];
 
-foreach ( $defaults as $key => $default ) {
-if ( ! array_key_exists( $key, $settings ) ) {
-continue;
-}
+        foreach ( $defaults as $key => $default ) {
+            if ( ! array_key_exists( $key, $settings ) ) {
+                continue;
+            }
 
 $value = $settings[ $key ];
 
@@ -174,13 +200,21 @@ break;
                 )
             );
             break;
-case 'email_templates':
-$output[ $key ] = array_map( 'wp_kses_post', (array) $value );
-break;
-default:
-$output[ $key ] = is_string( $value ) ? sanitize_text_field( $value ) : $value;
-}
-}
+            case 'email_templates':
+                $templates      = array_map( 'wp_kses_post', (array) $value );
+                $output[ $key ] = array_merge( $defaults['email_templates'], $templates );
+                break;
+            case 'sms_templates':
+                $templates      = array_map( 'sanitize_textarea_field', (array) $value );
+                $output[ $key ] = array_merge( $defaults['sms_templates'], $templates );
+                break;
+            case 'checkin_email':
+                $output[ $key ] = sanitize_email( $value );
+                break;
+            default:
+                $output[ $key ] = is_string( $value ) ? sanitize_text_field( $value ) : $value;
+        }
+    }
 
     $output['currency'] = 'USD';
 
@@ -200,9 +234,39 @@ return (array) $this->get( 'pricing_tiers', $this->get_defaults()['pricing_tiers
 /**
  * Retrieve business rules.
  */
-public function get_business_rules(): array {
-return (array) $this->get( 'business_rules', [] );
-}
+    public function get_business_rules(): array {
+        return (array) $this->get( 'business_rules', [] );
+    }
+
+    public function get_email_templates(): array {
+        $defaults = $this->get_defaults()['email_templates'];
+        $stored   = (array) $this->get( 'email_templates', [] );
+
+        return array_merge( $defaults, $stored );
+    }
+
+    public function get_sms_templates(): array {
+        $defaults = $this->get_defaults()['sms_templates'];
+        $stored   = (array) $this->get( 'sms_templates', [] );
+
+        return array_merge( $defaults, $stored );
+    }
+
+    public function get_email_template( string $key ): string {
+        $templates = $this->get_email_templates();
+
+        return isset( $templates[ $key ] ) ? (string) $templates[ $key ] : '';
+    }
+
+    public function get_sms_template( string $key ): string {
+        $templates = $this->get_sms_templates();
+
+        return isset( $templates[ $key ] ) ? (string) $templates[ $key ] : '';
+    }
+
+    public function get_checkin_email(): string {
+        return (string) $this->get( 'checkin_email', '' );
+    }
 
     public function get_coupons(): array {
         $coupons = (array) $this->get( 'coupons', [] );

@@ -195,8 +195,13 @@ $response = $this->request(
 );
 
 if ( isset( $response['status'] ) && 'succeeded' === $response['status'] ) {
-update_post_meta( $booking_id, '_vrsp_balance_paid', 1 );
-$this->logger->info( 'Balance payment succeeded.', [ 'booking_id' => $booking_id ] );
+    $was_balance_paid = (bool) get_post_meta( $booking_id, '_vrsp_balance_paid', true );
+    update_post_meta( $booking_id, '_vrsp_balance_paid', 1 );
+    $this->logger->info( 'Balance payment succeeded.', [ 'booking_id' => $booking_id ] );
+
+    if ( ! $was_balance_paid ) {
+        do_action( 'vrsp_booking_payment_received', $booking_id, 'balance' );
+    }
 } elseif ( isset( $response['error'] ) ) {
 $this->logger->error( 'Balance payment failed.', $response );
 }
@@ -213,6 +218,7 @@ $this->logger->error( 'Balance payment failed.', $response );
             return;
         }
 
+        $was_deposit_paid = (bool) get_post_meta( $booking->ID, '_vrsp_deposit_paid', true );
         update_post_meta( $booking->ID, '_vrsp_deposit_paid', 1 );
         if ( isset( $session['customer'] ) ) {
             update_post_meta( $booking->ID, '_vrsp_stripe_customer', sanitize_text_field( $session['customer'] ) );
@@ -239,6 +245,11 @@ $this->logger->error( 'Balance payment failed.', $response );
         );
 
         $this->logger->info( 'Stripe checkout completed.', [ 'booking_id' => $booking->ID ] );
+
+        if ( ! $was_deposit_paid ) {
+            do_action( 'vrsp_booking_payment_received', $booking->ID, 'deposit' );
+        }
+
         do_action( 'vrsp_booking_pending_admin', $booking->ID );
     }
 
@@ -249,7 +260,12 @@ return;
 }
 
 if ( ( $intent['metadata']['type'] ?? '' ) === 'balance' ) {
-update_post_meta( $booking_id, '_vrsp_balance_paid', 1 );
+    $was_balance_paid = (bool) get_post_meta( $booking_id, '_vrsp_balance_paid', true );
+    update_post_meta( $booking_id, '_vrsp_balance_paid', 1 );
+
+    if ( ! $was_balance_paid ) {
+        do_action( 'vrsp_booking_payment_received', $booking_id, 'balance' );
+    }
 }
 
 $this->logger->info( 'Stripe payment succeeded.', [ 'booking_id' => $booking_id ] );
@@ -277,6 +293,8 @@ $this->logger->error( 'Stripe payment failed.', [ 'booking_id' => $booking_id, '
         update_post_meta( $post_id, '_vrsp_guests', (int) $booking['guests'] );
         update_post_meta( $post_id, '_vrsp_email', sanitize_email( $booking['email'] ) );
         update_post_meta( $post_id, '_vrsp_phone', sanitize_text_field( $booking['phone'] ) );
+        update_post_meta( $post_id, '_vrsp_first_name', sanitize_text_field( $booking['first_name'] ?? '' ) );
+        update_post_meta( $post_id, '_vrsp_last_name', sanitize_text_field( $booking['last_name'] ?? '' ) );
         update_post_meta( $post_id, '_vrsp_checkin_time', $this->settings->get_business_rules()['checkin_time'] ?? '16:00' );
         update_post_meta( $post_id, '_vrsp_checkout_time', $this->settings->get_business_rules()['checkout_time'] ?? '11:00' );
         update_post_meta( $post_id, '_vrsp_quote', $quote );
