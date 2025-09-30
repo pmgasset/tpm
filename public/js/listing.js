@@ -8,7 +8,11 @@
             return;
         }
 
+
+        var selectors = {
+
         const selectors = {
+
             form: listingData?.selectors?.form || '.vrsp-form',
             quote: listingData?.selectors?.quote || '.vrsp-quote',
             message: listingData?.selectors?.message || '.vrsp-message',
@@ -18,6 +22,17 @@
             availabilityCalendar: listingData?.selectors?.availabilityCalendar || '.vrsp-availability__calendar',
             rateList: listingData?.selectors?.rateList || '.vrsp-availability__rate-list',
         };
+
+
+        var form = widget.querySelector(selectors.form);
+        var quotePanel = widget.querySelector(selectors.quote);
+        var message = widget.querySelector(selectors.message);
+        var submitButton = widget.querySelector(selectors.submit);
+        var continueButton = widget.querySelector(selectors.continueButton);
+        var availability = widget.querySelector(selectors.availability);
+        var availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
+        var rateListEl = widget.querySelector(selectors.rateList);
+
 
         const form = widget.querySelector(selectors.form);
         const quotePanel = widget.querySelector(selectors.quote);
@@ -47,12 +62,22 @@
             return;
         }
 
+
+        var currency = availability.getAttribute('data-currency') || listingData.currency || 'USD';
+
+        var formatCurrency = (amount) => {
+
         const currency = availability.getAttribute('data-currency') || listingData.currency || 'USD';
 
         const formatCurrency = (amount) => {
+
             const value = Number(amount || 0);
             return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
         };
+
+
+        var renderBlocked = (blocked) => {
+            if (!availabilityCalendarEl) {
 
         const renderBlocked = (blocked) => {
             if (!availabilityCalendarEl) {
@@ -61,6 +86,7 @@
 
 
             if (!availabilityCalendar) {
+
 
 
                 return;
@@ -83,7 +109,11 @@
             });
         };
 
+
+        var renderRates = (rates) => {
+
         const renderRates = (rates) => {
+
             if (!rateListEl) {
                 return;
             }
@@ -101,7 +131,7 @@
             });
         };
 
-        const populateQuote = (quote) => {
+        var populateQuote = (quote) => {
             if (!quote) {
                 quotePanel.hidden = true;
                 return;
@@ -133,7 +163,7 @@
             }
         };
 
-        const collectPayload = () => ({
+        var collectPayload = () => ({
             arrival: form.arrival.value,
             departure: form.departure.value,
             guests: form.guests.value,
@@ -144,7 +174,11 @@
             phone: form.phone.value,
         });
 
+
+        var resetMessage = () => {
+
         const resetMessage = () => {
+
             if (!message) {
                 return;
             }
@@ -153,7 +187,7 @@
             message.textContent = '';
         };
 
-        const setButtonState = (button, disabled) => {
+        var setButtonState = (button, disabled) => {
             if (!button) {
                 return;
             }
@@ -166,10 +200,10 @@
             }
         };
 
-        const getGenericError = () =>
+        var getGenericError = () =>
             listingData?.i18n?.genericError || 'Unable to process booking. Please try again.';
 
-        const loadAvailability = () => {
+        var loadAvailability = () => {
             if (!listingData.api) {
                 return;
             }
@@ -190,6 +224,32 @@
                     // Keep silent if availability fails.
                 });
         };
+
+
+        var latestPayload = null;
+        var quoteDebounceId = null;
+        var quoteController = null;
+        var quoteRequestId = 0;
+
+        var hasQuoteRequirements = (payload) =>
+            Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
+
+        var scheduleQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+            }
+
+            quoteDebounceId = window.setTimeout(() => {
+                quoteDebounceId = null;
+                requestQuote();
+            }, 350);
+        };
+
+        var requestQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+                quoteDebounceId = null;
+            }
 
         let latestPayload = null;
         let quoteDebounceId = null;
@@ -257,6 +317,7 @@
             if (!listingData.api) {
 
 
+
             const payload = collectPayload();
 
             resetMessage();
@@ -268,6 +329,90 @@
                 setButtonState(continueButton, true);
                 setButtonState(submitButton, false);
                 if (message) {
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quotePrompt ||
+                        'Enter your trip details to see an instant quote.';
+                }
+                if (quoteController) {
+                    quoteController.abort();
+                    quoteController = null;
+                }
+                return;
+            }
+
+            if (!listingData.api) {
+
+
+
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                setButtonState(submitButton, false);
+                if (message) {
+
+                    message.classList.add('error');
+                    message.textContent = getGenericError();
+                }
+                return;
+            }
+
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.quoteLoading || 'Fetching your quote…';
+            }
+
+            if (quoteController) {
+                quoteController.abort();
+            }
+
+            quoteController = new AbortController();
+            const currentRequestId = ++quoteRequestId;
+
+            fetch(`${listingData.api}/quote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: quoteController.signal,
+            })
+                .then((res) => {
+                    if (!res.ok) {
+                        throw new Error(getGenericError());
+                    }
+
+                    return res.json();
+                })
+                .then((quote) => {
+                    if (currentRequestId !== quoteRequestId) {
+                        return;
+                    }
+
+                    if (quote.error) {
+                        throw new Error(quote.error);
+                    }
+
+                    populateQuote(quote);
+                    latestPayload = payload;
+                    setButtonState(continueButton, false);
+                    if (message) {
+                        resetMessage();
+                        message.classList.add('success');
+                        message.textContent = listingData?.i18n?.quoteReady ||
+                            'Quote ready! Review the details before continuing to payment.';
+                    }
+                })
+                .catch((error) => {
+                    if (error?.name === 'AbortError') {
+                        return;
+                    }
+
+                    if (currentRequestId !== quoteRequestId) {
+                        return;
+                    }
+
+
 
                     message.classList.add('error');
                     message.textContent = getGenericError();
@@ -405,6 +550,7 @@
                     }
 
 
+
                     latestPayload = null;
                     populateQuote(null);
                     setButtonState(continueButton, true);
@@ -414,6 +560,10 @@
 
 
                         resetMessage();
+
+
+                        resetMessage();
+
 
 
 
@@ -429,12 +579,14 @@
                     }
 
 
+
                     setButtonState(submitButton, false);
+
 
                 });
         };
 
-        const handleContinue = () => {
+        var handleContinue = () => {
             if (!continueButton) {
                 return;
 
@@ -449,7 +601,11 @@
 
                         'We need to finish building your quote before continuing to secure payment.';
 
+
+                        'We need to finish building your quote before continuing to secure payment.';
+
                         'Request a quote before continuing to secure payment.';
+
 
                 }
                 return;
@@ -461,6 +617,10 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
+            }
+
+
 
 
             }
@@ -490,6 +650,7 @@
 
 
             }
+
 
             if (!listingData.api) {
                 setButtonState(continueButton, false);
@@ -568,6 +729,14 @@
         }
 
 
+        if (continueButton) {
+            continueButton.addEventListener('click', handleContinue);
+        }
+
+        scheduleQuote();
+
+
+
 
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
@@ -614,6 +783,7 @@
 
 
         scheduleQuote();
+
 
 
 
