@@ -4,6 +4,7 @@ namespace VRSP\Utilities;
 use DateInterval;
 use DatePeriod;
 use DateTimeImmutable;
+use function __;
 use VRSP\Settings;
 
 /**
@@ -21,68 +22,77 @@ $this->settings = $settings;
 $this->logger   = $logger;
 }
 
-public function calculate_quote( string $arrival, string $departure, int $guests = 1, string $coupon_code = '' ): array {
-$arrive = new DateTimeImmutable( $arrival );
-$leave  = new DateTimeImmutable( $departure );
+    public function calculate_quote( string $arrival, string $departure, int $guests = 1, string $coupon_code = '' ): array {
+        $arrive = new DateTimeImmutable( $arrival );
+        $leave  = new DateTimeImmutable( $departure );
 
-$nights = max( 1, (int) $leave->diff( $arrive )->days );
+        $nights = max( 1, (int) $leave->diff( $arrive )->days );
 
-$base_rate = (float) $this->settings->get( 'base_rate', 200 );
-$subtotal  = $base_rate * $nights;
+        $base_rate = (float) $this->settings->get( 'base_rate', 200 );
+        $nightly   = $base_rate * $nights;
 
-$uplift_percent = $this->get_dynamic_uplift();
-$uplift_amount  = $subtotal * $uplift_percent;
+        $uplift_percent = $this->get_dynamic_uplift();
+        $uplift_amount  = $nightly * $uplift_percent;
 
-$subtotal += $uplift_amount;
+        $nightly_total = $nightly + $uplift_amount;
 
-$cleaning_fee = (float) $this->settings->get( 'cleaning_fee', 0 );
-$subtotal    += $cleaning_fee;
+        $cleaning_fee = (float) $this->settings->get( 'cleaning_fee', 0 );
+        $damage_fee   = 0.0;
 
-$damage_fee = 0;
-if ( $this->settings->get( 'enable_damage_fee', false ) ) {
-$damage_fee = (float) $this->settings->get( 'damage_fee', 0 );
-$subtotal  += $damage_fee;
-}
+        if ( $this->settings->get( 'enable_damage_fee', false ) ) {
+            $damage_fee = (float) $this->settings->get( 'damage_fee', 0 );
+        }
 
-$coupon      = $this->get_coupon( $coupon_code, $arrive );
-$coupon_rate = 0;
-if ( $coupon ) {
-if ( 'percent' === $coupon['type'] ) {
-$coupon_rate = min( 1, max( 0, $coupon['amount'] / 100 ) );
-$subtotal   -= $subtotal * $coupon_rate;
-} else {
-$subtotal -= $coupon['amount'];
-}
-}
+        $pre_discount_subtotal = $nightly_total + $cleaning_fee + $damage_fee;
 
-$subtotal = max( 0, $subtotal );
+        $coupon       = $this->get_coupon( $coupon_code, $arrive );
+        $coupon_rate  = 0.0;
+        $coupon_error = '';
+        $discount     = 0.0;
 
-$tax_rate = (float) $this->settings->get( 'tax_rate', 0 );
-$taxes    = round( $subtotal * $tax_rate, 2 );
-$total    = round( $subtotal + $taxes, 2 );
+        if ( $coupon_code && ! $coupon ) {
+            $coupon_error = __( 'Coupon code is invalid, expired, or fully redeemed.', 'vr-single-property' );
+        }
 
-$deposit_percent = $this->get_deposit_percentage( $arrive );
-$deposit         = round( $total * $deposit_percent, 2 );
-$balance         = $total - $deposit;
+        if ( $coupon ) {
+            $discount_details = $this->resolve_coupon_discount( $coupon, $nightly_total, $pre_discount_subtotal, $nights );
+            $discount         = $discount_details['amount'];
+            $coupon_rate      = $discount_details['rate'];
+        }
 
-return [
-'currency'        => $this->settings->get( 'currency', 'USD' ),
-'nights'          => $nights,
-'base_rate'       => $base_rate,
-'uplift_percent'  => $uplift_percent,
-'uplift_amount'   => round( $uplift_amount, 2 ),
-'cleaning_fee'    => $cleaning_fee,
-'damage_fee'      => $damage_fee,
-'coupon'          => $coupon,
-'coupon_rate'     => $coupon_rate,
-'taxes'           => $taxes,
-'subtotal'        => round( $subtotal, 2 ),
-'total'           => $total,
-'deposit'         => $deposit,
-'balance'         => round( $balance, 2 ),
-'deposit_percent' => $deposit_percent,
-];
-}
+        $discount = min( $discount, $pre_discount_subtotal );
+        $subtotal = max( 0, $pre_discount_subtotal - $discount );
+
+        $tax_rate = (float) $this->settings->get( 'tax_rate', 0 );
+        $taxes    = round( $subtotal * $tax_rate, 2 );
+        $total    = round( $subtotal + $taxes, 2 );
+
+        $deposit_percent = $this->get_deposit_percentage( $arrive );
+        $deposit         = round( $total * $deposit_percent, 2 );
+        $balance         = $total - $deposit;
+
+        return [
+            'currency'              => $this->settings->get( 'currency', 'USD' ),
+            'nights'                => $nights,
+            'base_rate'             => $base_rate,
+            'uplift_percent'        => $uplift_percent,
+            'uplift_amount'         => round( $uplift_amount, 2 ),
+            'nightly_subtotal'      => round( $nightly_total, 2 ),
+            'cleaning_fee'          => $cleaning_fee,
+            'damage_fee'            => $damage_fee,
+            'pre_discount_subtotal' => round( $pre_discount_subtotal, 2 ),
+            'discount'              => round( $discount, 2 ),
+            'coupon'                => $coupon,
+            'coupon_rate'           => $coupon_rate,
+            'coupon_error'          => $coupon_error,
+            'taxes'                 => $taxes,
+            'subtotal'              => round( $subtotal, 2 ),
+            'total'                 => $total,
+            'deposit'               => $deposit,
+            'balance'               => round( $balance, 2 ),
+            'deposit_percent'       => $deposit_percent,
+        ];
+    }
 
 public function track_view(): void {
 if ( ! $this->is_tracking_allowed() ) {
@@ -146,6 +156,10 @@ return $uplift;
         update_post_meta( $booking_id, '_vrsp_quote', $quote );
         update_post_meta( $booking_id, '_vrsp_uplift_percent', $quote['uplift_percent'] ?? 0 );
         update_post_meta( $booking_id, '_vrsp_coupon', $quote['coupon']['code'] ?? '' );
+
+        if ( ! empty( $quote['coupon']['code'] ) ) {
+            $this->record_coupon_redemption( $booking_id, $quote['coupon']['code'] );
+        }
     }
 
     public function get_calendar_rates( DateTimeImmutable $from, DateTimeImmutable $to ): array {
@@ -169,35 +183,97 @@ return $uplift;
         return $rates;
     }
 
-private function get_coupon( string $code, DateTimeImmutable $arrival ): ?array {
-if ( ! $code ) {
-return null;
-}
+    private function get_coupon( string $code, DateTimeImmutable $arrival ): ?array {
+        if ( ! $code ) {
+            return null;
+        }
 
-$code    = strtoupper( sanitize_text_field( $code ) );
-$coupons = $this->settings->get_coupons();
+        $code    = strtoupper( sanitize_text_field( $code ) );
+        $coupons = $this->settings->get_coupons();
 
-foreach ( $coupons as $coupon ) {
-if ( $coupon['code'] !== $code ) {
-continue;
-}
+        foreach ( $coupons as $coupon ) {
+            if ( $coupon['code'] !== $code ) {
+                continue;
+            }
 
-$valid_from = ! empty( $coupon['valid_from'] ) ? new DateTimeImmutable( $coupon['valid_from'] ) : null;
-$valid_to   = ! empty( $coupon['valid_to'] ) ? new DateTimeImmutable( $coupon['valid_to'] ) : null;
+            $valid_from = ! empty( $coupon['valid_from'] ) ? new DateTimeImmutable( $coupon['valid_from'] ) : null;
+            $valid_to   = ! empty( $coupon['valid_to'] ) ? new DateTimeImmutable( $coupon['valid_to'] ) : null;
 
-if ( $valid_from && $arrival < $valid_from ) {
-continue;
-}
+            if ( $valid_from && $arrival < $valid_from ) {
+                continue;
+            }
 
-if ( $valid_to && $arrival > $valid_to ) {
-continue;
-}
+            if ( $valid_to && $arrival > $valid_to ) {
+                continue;
+            }
 
-return $coupon;
-}
+            $max_redemptions = isset( $coupon['max_redemptions'] ) ? (int) $coupon['max_redemptions'] : 0;
+            $redemptions     = $this->settings->get_coupon_redemptions( $coupon['code'] );
 
-return null;
-}
+            if ( $max_redemptions > 0 && $redemptions >= $max_redemptions ) {
+                continue;
+            }
+
+            $coupon['redemptions'] = $redemptions;
+            $coupon['remaining_redemptions'] = $max_redemptions > 0 ? max( 0, $max_redemptions - $redemptions ) : null;
+
+            return $coupon;
+        }
+
+        return null;
+    }
+
+    private function resolve_coupon_discount( array $coupon, float $nightly_total, float $pre_discount_subtotal, int $nights ): array {
+        $type   = $coupon['type'] ?? 'flat_total';
+        $amount = isset( $coupon['amount'] ) ? (float) $coupon['amount'] : 0.0;
+        $amount = max( 0.0, $amount );
+
+        $discount = 0.0;
+        $rate     = 0.0;
+
+        switch ( $type ) {
+            case 'percent_total':
+                $rate     = min( 1, max( 0, $amount / 100 ) );
+                $discount = $pre_discount_subtotal * $rate;
+                break;
+            case 'percent_night':
+                $rate     = min( 1, max( 0, $amount / 100 ) );
+                $discount = $nightly_total * $rate;
+                break;
+            case 'flat_night':
+                $discount = min( $nightly_total, $amount * max( 1, $nights ) );
+                break;
+            case 'flat_total':
+            default:
+                $discount = $amount;
+                break;
+        }
+
+        if ( $discount < 0 ) {
+            $discount = 0.0;
+        }
+
+        return [
+            'amount' => $discount,
+            'rate'   => $rate,
+        ];
+    }
+
+    private function record_coupon_redemption( int $booking_id, string $code ): void {
+        $code = strtoupper( sanitize_text_field( $code ) );
+
+        if ( ! $code ) {
+            return;
+        }
+
+        $already_recorded = get_post_meta( $booking_id, '_vrsp_coupon_recorded', true );
+        if ( $already_recorded ) {
+            return;
+        }
+
+        $this->settings->record_coupon_redemption( $code );
+        update_post_meta( $booking_id, '_vrsp_coupon_recorded', $code );
+    }
 
 private function get_deposit_percentage( DateTimeImmutable $arrival ): float {
 $rules = $this->settings->get_business_rules();

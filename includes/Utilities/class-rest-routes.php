@@ -12,6 +12,7 @@ use VRSP\Integrations\SmsGateway;
 use VRSP\Integrations\StripeGateway;
 use VRSP\Rules\BusinessRules;
 use VRSP\Settings;
+use function __;
 
 /**
  * Registers REST API routes.
@@ -149,7 +150,14 @@ public function create_booking( WP_REST_Request $request ) {
             return new WP_Error( 'unavailable', __( 'Those dates were just booked. Choose another range.', 'vr-single-property' ), [ 'status' => 409 ] );
         }
 
-        $quote = $this->pricing->calculate_quote( $arrival->format( 'Y-m-d' ), $departure->format( 'Y-m-d' ), absint( $body['guests'] ?? 1 ), sanitize_text_field( $body['coupon'] ?? '' ) );
+        $coupon_code = sanitize_text_field( $body['coupon'] ?? '' );
+        $quote       = $this->pricing->calculate_quote( $arrival->format( 'Y-m-d' ), $departure->format( 'Y-m-d' ), absint( $body['guests'] ?? 1 ), $coupon_code );
+
+        if ( $coupon_code && ( empty( $quote['coupon'] ) || ! empty( $quote['coupon_error'] ) ) ) {
+            $message = ! empty( $quote['coupon_error'] ) ? $quote['coupon_error'] : __( 'Coupon code is invalid, expired, or fully redeemed.', 'vr-single-property' );
+
+            return new WP_Error( 'invalid_coupon', $message, [ 'status' => 400 ] );
+        }
 
         $user_id = $this->sync_guest_user(
             [
@@ -176,7 +184,7 @@ public function create_booking( WP_REST_Request $request ) {
                 'phone'      => sanitize_text_field( $body['phone'] ?? '' ),
                 'first_name' => sanitize_text_field( $body['first_name'] ),
                 'last_name'  => sanitize_text_field( $body['last_name'] ),
-                'coupon'     => sanitize_text_field( $body['coupon'] ?? '' ),
+                'coupon'     => $coupon_code,
                 'user_id'    => $user_id,
             ],
             $quote

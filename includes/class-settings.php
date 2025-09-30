@@ -3,12 +3,14 @@ namespace VRSP;
 
 use function __;
 use function did_action;
+use function wp_list_pluck;
 
 /**
  * Settings repository.
  */
 class Settings {
 public const OPTION_KEY = 'vrsp_settings';
+public const COUPON_USAGE_KEY = 'vrsp_coupon_usage';
 
 /**
  * Cached settings.
@@ -155,22 +157,23 @@ break;
 case 'business_rules':
 $output[ $key ] = wp_parse_args( array_map( 'sanitize_text_field', (array) $value ), $defaults['business_rules'] );
 break;
-case 'coupons':
-$output[ $key ] = array_values(
-array_map(
-static function ( $coupon ) {
-return [
-'code'      => isset( $coupon['code'] ) ? strtoupper( sanitize_text_field( $coupon['code'] ) ) : '',
-'type'      => isset( $coupon['type'] ) && 'percent' === $coupon['type'] ? 'percent' : 'flat',
-'amount'    => isset( $coupon['amount'] ) ? floatval( $coupon['amount'] ) : 0.0,
-'valid_from'=> isset( $coupon['valid_from'] ) ? sanitize_text_field( $coupon['valid_from'] ) : '',
-'valid_to'  => isset( $coupon['valid_to'] ) ? sanitize_text_field( $coupon['valid_to'] ) : '',
-];
-},
-(array) $value
-)
-);
-break;
+        case 'coupons':
+            $coupons = array_map(
+                function ( $coupon ) {
+                    return $this->normalize_coupon( (array) $coupon );
+                },
+                (array) $value
+            );
+
+            $output[ $key ] = array_values(
+                array_filter(
+                    $coupons,
+                    static function ( $coupon ) {
+                        return ! empty( $coupon['code'] );
+                    }
+                )
+            );
+            break;
 case 'email_templates':
 $output[ $key ] = array_map( 'wp_kses_post', (array) $value );
 break;
@@ -179,9 +182,12 @@ $output[ $key ] = is_string( $value ) ? sanitize_text_field( $value ) : $value;
 }
 }
 
-$output['currency'] = 'USD';
+    $output['currency'] = 'USD';
 
-return wp_parse_args( $output, $defaults );
+    $codes = isset( $output['coupons'] ) ? wp_list_pluck( (array) $output['coupons'], 'code' ) : [];
+    $this->sync_coupon_usage_codes( $codes );
+
+    return wp_parse_args( $output, $defaults );
 }
 
 /**
@@ -198,7 +204,128 @@ public function get_business_rules(): array {
 return (array) $this->get( 'business_rules', [] );
 }
 
-public function get_coupons(): array {
-return (array) $this->get( 'coupons', [] );
-}
+    public function get_coupons(): array {
+        $coupons = (array) $this->get( 'coupons', [] );
+
+        $normalized = array_map(
+            function ( $coupon ) {
+                return $this->normalize_coupon( (array) $coupon );
+            },
+            $coupons
+        );
+
+        return array_values(
+            array_filter(
+                $normalized,
+                static function ( $coupon ) {
+                    return ! empty( $coupon['code'] );
+                }
+            )
+        );
+    }
+
+    /**
+     * Retrieve coupon usage counts keyed by code.
+     */
+    public function get_coupon_usage_counts(): array {
+        $usage = get_option( self::COUPON_USAGE_KEY, [] );
+
+        if ( ! is_array( $usage ) ) {
+            return [];
+        }
+
+        return array_map( 'absint', $usage );
+    }
+
+    /**
+     * Get redemption count for a coupon code.
+     */
+    public function get_coupon_redemptions( string $code ): int {
+        $code  = strtoupper( $code );
+        $usage = $this->get_coupon_usage_counts();
+
+        return isset( $usage[ $code ] ) ? absint( $usage[ $code ] ) : 0;
+    }
+
+    /**
+     * Record a redemption for the provided coupon code.
+     */
+    public function record_coupon_redemption( string $code ): void {
+        $code = strtoupper( $code );
+
+        if ( ! $code ) {
+            return;
+        }
+
+        $usage = $this->get_coupon_usage_counts();
+        $usage[ $code ] = isset( $usage[ $code ] ) ? absint( $usage[ $code ] ) + 1 : 1;
+
+        update_option( self::COUPON_USAGE_KEY, $usage );
+    }
+
+    /**
+     * Remove usage entries for coupons that no longer exist.
+     */
+    public function sync_coupon_usage_codes( array $codes ): void {
+        $codes = array_filter( array_map( 'strtoupper', $codes ) );
+        $usage = $this->get_coupon_usage_counts();
+
+        if ( empty( $usage ) ) {
+            if ( empty( $codes ) ) {
+                return;
+            }
+
+            update_option( self::COUPON_USAGE_KEY, [] );
+            return;
+        }
+
+        $allowed  = array_fill_keys( $codes, true );
+        $filtered = array_intersect_key( $usage, $allowed );
+
+        if ( $filtered !== $usage ) {
+            update_option( self::COUPON_USAGE_KEY, $filtered );
+        }
+    }
+
+    /**
+     * Normalise coupon data regardless of source.
+     */
+    private function normalize_coupon( array $coupon ): array {
+        $code = isset( $coupon['code'] ) ? strtoupper( sanitize_text_field( $coupon['code'] ) ) : '';
+
+        $type = isset( $coupon['type'] ) ? sanitize_text_field( $coupon['type'] ) : 'flat_total';
+        $type = strtolower( $type );
+
+        $map = [
+            'flat'    => 'flat_total',
+            'percent' => 'percent_total',
+        ];
+
+        if ( isset( $map[ $type ] ) ) {
+            $type = $map[ $type ];
+        }
+
+        $allowed = [ 'flat_total', 'percent_total', 'flat_night', 'percent_night' ];
+        if ( ! in_array( $type, $allowed, true ) ) {
+            $type = 'flat_total';
+        }
+
+        $amount = isset( $coupon['amount'] ) ? floatval( $coupon['amount'] ) : 0.0;
+        if ( in_array( $type, [ 'percent_total', 'percent_night' ], true ) ) {
+            $amount = min( 100, max( 0, $amount ) );
+        } else {
+            $amount = max( 0, $amount );
+        }
+
+        $max_redemptions = isset( $coupon['max_redemptions'] ) ? absint( $coupon['max_redemptions'] ) : 0;
+
+        return [
+            'code'            => $code,
+            'type'            => $type,
+            'amount'          => $amount,
+            'max_redemptions' => $max_redemptions,
+            'valid_from'      => isset( $coupon['valid_from'] ) ? sanitize_text_field( $coupon['valid_from'] ) : '',
+            'valid_to'        => isset( $coupon['valid_to'] ) ? sanitize_text_field( $coupon['valid_to'] ) : '',
+        ];
+    }
 }
