@@ -25,7 +25,7 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
     <section class="vrsp-card vrsp-card--form">
         <header class="vrsp-card__header">
             <h2><?php esc_html_e( 'Reserve Your Stay', 'vr-single-property' ); ?></h2>
-            <p><?php esc_html_e( 'Request a quote to review nightly rates, fees, and deposit requirements before continuing to secure payment with Stripe.', 'vr-single-property' ); ?></p>
+            <p><?php esc_html_e( 'Your quote updates instantly as you fill in the details below. Review the trip summary, then continue to secure payment with Stripe.', 'vr-single-property' ); ?></p>
         </header>
         <form class="vrsp-form">
             <div class="vrsp-form__grid">
@@ -63,7 +63,6 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
                 </label>
             </div>
             <div class="vrsp-form__actions">
-                <button type="submit" class="vrsp-form__submit"><?php esc_html_e( 'Get Quote', 'vr-single-property' ); ?></button>
                 <button type="button" class="vrsp-form__continue" disabled><?php esc_html_e( 'Continue to Secure Payment', 'vr-single-property' ); ?></button>
             </div>
         </form>

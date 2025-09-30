@@ -19,6 +19,7 @@
             rateList: listingData?.selectors?.rateList || '.vrsp-availability__rate-list',
         };
 
+
         const form = widget.querySelector(selectors.form);
         const quotePanel = widget.querySelector(selectors.quote);
         const message = widget.querySelector(selectors.message);
@@ -30,7 +31,17 @@
         const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
         const rateList = widget.querySelector(selectors.rateList);
 
-        if (!form || !quotePanel || !submitButton || !continueButton || !availability) {
+
+        const form = widget.querySelector(selectors.form);
+        const quotePanel = widget.querySelector(selectors.quote);
+        const message = widget.querySelector(selectors.message);
+        const submitButton = widget.querySelector(selectors.submit);
+        const continueButton = widget.querySelector(selectors.continueButton);
+        const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendarEl = widget.querySelector(selectors.availabilityCalendar);
+        const rateListEl = widget.querySelector(selectors.rateList);
+
+        if (!form || !quotePanel || !continueButton || !availability) {
             return;
         }
 
@@ -43,7 +54,10 @@
 
         const renderBlocked = (blocked) => {
             if (!availabilityCalendarEl) {
+
+
             if (!availabilityCalendar) {
+
                 return;
             }
 
@@ -125,11 +139,6 @@
             phone: form.phone.value,
         });
 
-        const payloadsMatch = (a, b) =>
-            ['arrival', 'departure', 'guests', 'coupon', 'first_name', 'last_name', 'email', 'phone'].every(
-                (key) => String(a[key] ?? '') === String(b[key] ?? '')
-            );
-
         const resetMessage = () => {
             if (!message) {
                 return;
@@ -178,6 +187,56 @@
         };
 
         let latestPayload = null;
+        let quoteDebounceId = null;
+        let quoteController = null;
+        let quoteRequestId = 0;
+
+
+        const hasQuoteRequirements = (payload) =>
+            Boolean(payload.arrival && payload.departure && payload.first_name && payload.last_name && payload.email);
+
+        const scheduleQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+            }
+
+            quoteDebounceId = window.setTimeout(() => {
+                quoteDebounceId = null;
+                requestQuote();
+            }, 350);
+        };
+
+        const requestQuote = () => {
+            if (quoteDebounceId) {
+                window.clearTimeout(quoteDebounceId);
+                quoteDebounceId = null;
+            }
+
+            const payload = collectPayload();
+
+            resetMessage();
+
+            if (!hasQuoteRequirements(payload)) {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                setButtonState(submitButton, false);
+                if (message) {
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quotePrompt ||
+                        'Enter your trip details to see an instant quote.';
+                }
+                if (quoteController) {
+                    quoteController.abort();
+                    quoteController = null;
+                }
+                return;
+            }
+
+            if (!listingData.api) {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
 
         const handleQuote = (event) => {
             event.preventDefault();
@@ -192,6 +251,7 @@
             setButtonState(submitButton, true);
 
             if (!listingData.api) {
+
                 setButtonState(submitButton, false);
                 if (message) {
                     message.classList.add('error');
@@ -200,10 +260,28 @@
                 return;
             }
 
+
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.quoteLoading || 'Fetching your quote…';
+            }
+
+            if (quoteController) {
+                quoteController.abort();
+            }
+
+            quoteController = new AbortController();
+            const currentRequestId = ++quoteRequestId;
+
             fetch(`${listingData.api}/quote`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
+
+                signal: quoteController.signal,
             })
                 .then((res) => {
                     if (!res.ok) {
@@ -213,46 +291,67 @@
                     return res.json();
                 })
                 .then((quote) => {
-                    if (quote.error) {
-                        throw new Error(quote.error);
+                    if (currentRequestId !== quoteRequestId) {
+                        return;
                     }
 
-                    const currentValues = collectPayload();
-                    if (!payloadsMatch(payload, currentValues)) {
-                        // Form changed while fetching a quote; ignore this response.
-                        return;
+                    if (quote.error) {
+                        throw new Error(quote.error);
                     }
 
                     populateQuote(quote);
                     latestPayload = payload;
                     setButtonState(continueButton, false);
-                    if (!quotePanel.hidden) {
-                        quotePanel.focus({ preventScroll: true });
-                    }
-
                     if (message) {
+
+                        resetMessage();
+                        message.classList.add('success');
+
                         message.classList.add('info');
+
                         message.textContent = listingData?.i18n?.quoteReady ||
                             'Quote ready! Review the details before continuing to payment.';
                     }
                 })
                 .catch((error) => {
+                    if (error?.name === 'AbortError') {
+                        return;
+                    }
+
+                    if (currentRequestId !== quoteRequestId) {
+                        return;
+                    }
+
+
                     latestPayload = null;
                     populateQuote(null);
                     setButtonState(continueButton, true);
                     if (message) {
+
+                        resetMessage();
+
+
                         message.classList.add('error');
                         message.textContent = error.message || getGenericError();
                     }
                 })
                 .finally(() => {
+
+                    if (currentRequestId === quoteRequestId) {
+                        quoteController = null;
+                        setButtonState(submitButton, false);
+                    }
+
                     setButtonState(submitButton, false);
+
                 });
         };
 
         const handleContinue = () => {
             if (!continueButton) {
                 return;
+
+
             }
 
             if (!latestPayload) {
@@ -271,17 +370,31 @@
             if (message) {
                 message.classList.add('info');
                 message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+
             }
 
             if (!listingData.api) {
                 setButtonState(continueButton, false);
                 setButtonState(submitButton, false);
                 if (message) {
+
+                    message.classList.add('info');
+                    message.textContent = listingData?.i18n?.quoteRequired ||
+                        'We need to finish building your quote before continuing to secure payment.';
+
                     message.classList.add('error');
                     message.textContent = getGenericError();
+
                 }
                 return;
             }
+
+            resetMessage();
+            setButtonState(continueButton, true);
+            setButtonState(submitButton, true);
+            if (message) {
+                message.classList.add('info');
+                message.textContent = listingData?.i18n?.checkoutPreparing || 'Preparing secure checkout…';
 
             }
 
@@ -341,6 +454,32 @@
         loadAvailability();
 
         if (form) {
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+            });
+            form.addEventListener('input', () => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+                scheduleQuote();
+            });
+            form.addEventListener('change', () => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                resetMessage();
+                scheduleQuote();
+            });
+        }
+
+        if (continueButton) {
+            continueButton.addEventListener('click', handleContinue);
+        }
+
+        scheduleQuote();
+
             form.addEventListener('submit', handleQuote);
             form.addEventListener('input', () => {
                 if (!latestPayload) {
@@ -357,6 +496,7 @@
         if (continueButton) {
             continueButton.addEventListener('click', handleContinue);
         }
+
 
         widget.dataset.vrspReady = 'true';
     };
