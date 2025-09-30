@@ -43,6 +43,10 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
                             <dt><?php esc_html_e( 'Cleaning fee', 'vr-single-property' ); ?></dt>
                             <dd data-pricing="cleaning">—</dd>
                         </div>
+                        <div style="display:none;" data-pricing-row="discount">
+                            <dt><?php esc_html_e( 'Coupon discount', 'vr-single-property' ); ?></dt>
+                            <dd data-pricing="discount">—</dd>
+                        </div>
                         <div>
                             <dt><?php esc_html_e( 'Taxes &amp; fees', 'vr-single-property' ); ?></dt>
                             <dd data-pricing="taxes">—</dd>

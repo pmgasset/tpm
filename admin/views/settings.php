@@ -91,26 +91,57 @@ $values = get_option( \VRSP\Settings::OPTION_KEY, $settings->get_defaults() );
 </table>
 <p><label><?php esc_html_e( 'Uplift Cap (decimal)', 'vr-single-property' ); ?> <input type="number" step="0.01" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[uplift_cap]" value="<?php echo esc_attr( $values['uplift_cap'] ); ?>" /></label></p>
 
+<?php
+$coupon_rows = $settings->get_coupons();
+$usage       = $settings->get_coupon_usage_counts();
+
+$blank_coupon = [
+    'code'            => '',
+    'type'            => 'flat_total',
+    'amount'          => '',
+    'max_redemptions' => '',
+    'valid_from'      => '',
+    'valid_to'        => '',
+];
+
+$coupon_rows[] = $blank_coupon;
+
+$type_options = [
+    'flat_total'    => __( 'Flat amount – entire reservation', 'vr-single-property' ),
+    'percent_total' => __( 'Percent – entire reservation', 'vr-single-property' ),
+    'flat_night'    => __( 'Flat amount – per night', 'vr-single-property' ),
+    'percent_night' => __( 'Percent – per night', 'vr-single-property' ),
+];
+?>
 <h2><?php esc_html_e( 'Coupons', 'vr-single-property' ); ?></h2>
 <table class="widefat">
-<thead><tr><th><?php esc_html_e( 'Code', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Type', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Amount', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Valid From', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Valid To', 'vr-single-property' ); ?></th></tr></thead>
+<thead><tr><th><?php esc_html_e( 'Code', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Type', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Amount', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Max Redemptions', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Redeemed', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Valid From', 'vr-single-property' ); ?></th><th><?php esc_html_e( 'Valid To', 'vr-single-property' ); ?></th></tr></thead>
 <tbody>
-<?php foreach ( $values['coupons'] as $index => $coupon ) : ?>
+<?php foreach ( $coupon_rows as $index => $coupon ) :
+    $code      = isset( $coupon['code'] ) ? strtoupper( $coupon['code'] ) : '';
+    $redeemed  = $code ? ( $usage[ $code ] ?? 0 ) : 0;
+    $max_limit = isset( $coupon['max_redemptions'] ) ? (int) $coupon['max_redemptions'] : 0;
+    $max_value = $max_limit > 0 ? $max_limit : '';
+    ?>
 <tr>
-<td><input type="text" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][code]" value="<?php echo esc_attr( $coupon['code'] ); ?>" /></td>
+<td><input type="text" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][code]" value="<?php echo esc_attr( $code ); ?>" /></td>
 <td>
 <select name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][type]">
-<option value="flat" <?php selected( $coupon['type'], 'flat' ); ?>><?php esc_html_e( 'Flat', 'vr-single-property' ); ?></option>
-<option value="percent" <?php selected( $coupon['type'], 'percent' ); ?>><?php esc_html_e( 'Percent', 'vr-single-property' ); ?></option>
+<?php foreach ( $type_options as $value => $label ) : ?>
+<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $coupon['type'] ?? 'flat_total', $value ); ?>><?php echo esc_html( $label ); ?></option>
+<?php endforeach; ?>
 </select>
 </td>
-<td><input type="number" step="0.01" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][amount]" value="<?php echo esc_attr( $coupon['amount'] ); ?>" /></td>
-<td><input type="date" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][valid_from]" value="<?php echo esc_attr( $coupon['valid_from'] ); ?>" /></td>
-<td><input type="date" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][valid_to]" value="<?php echo esc_attr( $coupon['valid_to'] ); ?>" /></td>
+<td><input type="number" step="0.01" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][amount]" value="<?php echo esc_attr( $coupon['amount'] ?? '' ); ?>" /></td>
+<td><input type="number" min="0" step="1" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][max_redemptions]" value="<?php echo esc_attr( $max_value ); ?>" placeholder="<?php esc_attr_e( 'Unlimited', 'vr-single-property' ); ?>" /></td>
+<td><?php echo esc_html( number_format_i18n( $redeemed ) ); ?></td>
+<td><input type="date" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][valid_from]" value="<?php echo esc_attr( $coupon['valid_from'] ?? '' ); ?>" /></td>
+<td><input type="date" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[coupons][<?php echo esc_attr( $index ); ?>][valid_to]" value="<?php echo esc_attr( $coupon['valid_to'] ?? '' ); ?>" /></td>
 </tr>
 <?php endforeach; ?>
 </tbody>
 </table>
+<p class="description"><?php esc_html_e( 'Leave max redemptions blank for unlimited use.', 'vr-single-property' ); ?></p>
 
 <?php submit_button(); ?>
 </form>

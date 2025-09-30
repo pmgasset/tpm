@@ -15,7 +15,7 @@
     };
 
     var SUMMARY_FIELDS = ['arrival', 'departure', 'nights'];
-    var PRICING_FIELDS = ['stay', 'cleaning', 'taxes', 'total', 'deposit', 'balance'];
+    var PRICING_FIELDS = ['stay', 'cleaning', 'discount', 'taxes', 'total', 'deposit', 'balance'];
 
     var stateByWidget = new WeakMap();
     var initAttempts = 0;
@@ -318,6 +318,10 @@
                     targets[field].textContent = '—';
                 }
             }
+
+            if (targets.discount && targets.discount.parentNode && targets.discount.parentNode.style) {
+                targets.discount.parentNode.style.display = 'none';
+            }
         }
 
         if (state.pricingNote) {
@@ -343,9 +347,20 @@
             nights = computeNights(payload);
         }
 
-        var stay = Number(quote.subtotal || 0);
-        if (!isFinite(stay)) {
-            stay = 0;
+        var discount = Number(quote.discount || 0);
+        if (!isFinite(discount)) {
+            discount = 0;
+        }
+        discount = roundCurrency(discount);
+
+        var preDiscount = Number(quote.pre_discount_subtotal || quote.preDiscountSubtotal || 0);
+        if (!isFinite(preDiscount) || preDiscount === 0) {
+            preDiscount = Number(quote.subtotal || 0);
+            if (!isFinite(preDiscount)) {
+                preDiscount = 0;
+            }
+
+            preDiscount += discount;
         }
 
         var cleaning = Number(quote.cleaning_fee || quote.cleaning || 0);
@@ -353,24 +368,29 @@
             cleaning = 0;
         }
 
-        var taxFields = ['taxes', 'fees', 'service_fee', 'damage_fee'];
-        var taxes = 0;
-        for (var i = 0; i < taxFields.length; i += 1) {
-            var value = Number(quote[taxFields[i]] || 0);
-            if (isFinite(value)) {
-                taxes += value;
-            }
+        var damage = Number(quote.damage_fee || 0);
+        if (!isFinite(damage)) {
+            damage = 0;
         }
 
-        var total = Number(quote.total || stay + cleaning + taxes);
-        if (!isFinite(total)) {
-            total = stay + cleaning + taxes;
+        cleaning = roundCurrency(cleaning + damage);
+
+        var stay = roundCurrency(preDiscount - cleaning);
+        if (stay < 0) {
+            stay = 0;
         }
 
-        total = roundCurrency(total);
-        stay = roundCurrency(stay);
-        cleaning = roundCurrency(cleaning);
+        var taxes = Number(quote.taxes || 0);
+        if (!isFinite(taxes)) {
+            taxes = 0;
+        }
         taxes = roundCurrency(taxes);
+
+        var total = Number(quote.total || preDiscount - discount + taxes);
+        if (!isFinite(total)) {
+            total = preDiscount - discount + taxes;
+        }
+        total = roundCurrency(total);
 
         var rules = (state.listingData && state.listingData.rules) || {};
         var threshold = Number(rules.deposit_threshold);
@@ -416,6 +436,7 @@
             nights: nights,
             stay: stay,
             cleaning: cleaning,
+            discount: discount,
             taxes: taxes,
             total: total,
             deposit: deposit,
@@ -499,6 +520,21 @@
 
             if (targets.cleaning) {
                 targets.cleaning.textContent = state.formatCurrency(breakdown.cleaning);
+            }
+
+            if (targets.discount) {
+                var discountRow = targets.discount.parentNode;
+                if (breakdown.discount > 0) {
+                    if (discountRow && discountRow.style) {
+                        discountRow.style.display = '';
+                    }
+                    targets.discount.textContent = '-' + state.formatCurrency(breakdown.discount);
+                } else {
+                    targets.discount.textContent = '—';
+                    if (discountRow && discountRow.style) {
+                        discountRow.style.display = 'none';
+                    }
+                }
             }
 
             if (targets.taxes) {
@@ -652,21 +688,32 @@
 
                 writePricing(state, payload, quote);
 
-                if (hasCheckoutFields(payload)) {
-                    setButtonDisabled(state.continueButton, false);
-                    writeMessage(
-                        state,
-                        'success',
-                        getText(listingData, 'quoteReady', 'Pricing updated! Review and continue to secure payment.')
-                    );
-                } else {
+                if (quote && quote.coupon_error) {
                     setButtonDisabled(state.continueButton, true);
-                    writeMessage(
-                        state,
-                        'info',
-                        getText(listingData, 'checkoutDetails', 'Add guest contact details to continue to secure payment.')
-                    );
+                    writeMessage(state, 'error', quote.coupon_error);
+                    return;
                 }
+
+                var hasCheckout = hasCheckoutFields(payload);
+                setButtonDisabled(state.continueButton, !hasCheckout);
+
+                var baseType = hasCheckout ? 'success' : 'info';
+                var baseText = hasCheckout
+                    ? getText(listingData, 'quoteReady', 'Pricing updated! Review and continue to secure payment.')
+                    : getText(listingData, 'checkoutDetails', 'Add guest contact details to continue to secure payment.');
+
+                var couponMessage = '';
+                if (quote && quote.coupon && quote.coupon.code) {
+                    var template = getText(listingData, 'couponApplied', 'Coupon %s applied!');
+                    couponMessage = template.replace('%s', quote.coupon.code);
+                }
+
+                if (couponMessage) {
+                    baseType = 'success';
+                    baseText = (couponMessage + ' ' + baseText).trim();
+                }
+
+                writeMessage(state, baseType, baseText);
             })
             .catch(function (error) {
                 if (controller && error && error.name === 'AbortError') {
