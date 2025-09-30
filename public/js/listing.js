@@ -27,6 +27,8 @@
         if (listingData && listingData.i18n && listingData.i18n[key]) {
             return listingData.i18n[key];
         }
+        return fallback;
+    }
 
         return fallback;
     }
@@ -61,6 +63,7 @@
             if (data && Array.isArray(data.blocked)) {
                 blocked = data.blocked;
             }
+        }
 
             if (blocked.length === 0) {
                 var empty = document.createElement('p');
@@ -87,6 +90,8 @@
             if (data && Array.isArray(data.rates)) {
                 rates = data.rates;
             }
+        }
+    }
 
             var maxRates = Math.min(rates.length, 6);
             for (var j = 0; j < maxRates; j += 1) {
