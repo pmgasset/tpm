@@ -7,6 +7,8 @@
     const form = widget.querySelector('.vrsp-form');
     const quotePanel = widget.querySelector('.vrsp-quote');
     const message = widget.querySelector('.vrsp-message');
+    const submitButton = widget.querySelector('.vrsp-form__submit');
+    const continueButton = widget.querySelector('.vrsp-form__continue');
     const availabilityCalendar = widget.querySelector('.vrsp-availability__calendar');
     const rateList = widget.querySelector('.vrsp-availability__rate-list');
 
@@ -55,6 +57,9 @@
         }
 
         quotePanel.hidden = false;
+        if (!quotePanel.hasAttribute('tabindex')) {
+            quotePanel.setAttribute('tabindex', '-1');
+        }
         widget.querySelector('[data-quote="nights"]').textContent = quote.nights;
         widget.querySelector('[data-quote="subtotal"]').textContent = formatCurrency(quote.subtotal);
         const taxes = Number(quote.taxes || 0) + Number(quote.cleaning_fee || 0) + Number(quote.damage_fee || 0);
@@ -70,6 +75,44 @@
             balanceRow.style.display = '';
             widget.querySelector('[data-quote="balance"]').textContent = formatCurrency(quote.balance);
             widget.querySelector('[data-quote="note"]').textContent = window.vrspListing.i18n?.depositNote || 'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.';
+        }
+    };
+
+    const collectPayload = () => ({
+        arrival: form.arrival.value,
+        departure: form.departure.value,
+        guests: form.guests.value,
+        coupon: form.coupon.value,
+        first_name: form.first_name.value,
+        last_name: form.last_name.value,
+        email: form.email.value,
+        phone: form.phone.value,
+    });
+
+    const payloadsMatch = (a, b) =>
+        ['arrival', 'departure', 'guests', 'coupon', 'first_name', 'last_name', 'email', 'phone'].every(
+            (key) => String(a[key] ?? '') === String(b[key] ?? '')
+        );
+
+    const resetMessage = () => {
+        if (!message) {
+            return;
+        }
+
+        message.className = 'vrsp-message';
+        message.textContent = '';
+    };
+
+    const setButtonState = (button, disabled) => {
+        if (!button) {
+            return;
+        }
+
+        button.disabled = !!disabled;
+        if (disabled) {
+            button.setAttribute('aria-disabled', 'true');
+        } else {
+            button.removeAttribute('aria-disabled');
         }
     };
 
@@ -91,64 +134,150 @@
             });
     };
 
-    const handleSubmit = (event) => {
-        event.preventDefault();
-        message.className = 'vrsp-message';
-        message.textContent = '';
+    let latestPayload = null;
 
-        const payload = {
-            arrival: form.arrival.value,
-            departure: form.departure.value,
-            guests: form.guests.value,
-            coupon: form.coupon.value,
-            first_name: form.first_name.value,
-            last_name: form.last_name.value,
-            email: form.email.value,
-            phone: form.phone.value,
-        };
+    const handleQuote = (event) => {
+        event.preventDefault();
+        resetMessage();
+        latestPayload = null;
+        setButtonState(continueButton, true);
+
+        const payload = collectPayload();
 
         populateQuote(null);
+
+        setButtonState(submitButton, true);
 
         fetch(`${vrspListing.api}/quote`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         })
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) {
+                    throw new Error(window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.');
+                }
+
+                return res.json();
+            })
             .then((quote) => {
                 if (quote.error) {
                     throw new Error(quote.error);
                 }
 
-                populateQuote(quote);
+                const currentValues = collectPayload();
+                if (!payloadsMatch(payload, currentValues)) {
+                    // Form changed while fetching a quote; ignore this response.
+                    return;
+                }
 
-                return fetch(`${vrspListing.api}/booking`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
+                populateQuote(quote);
+                latestPayload = payload;
+                setButtonState(continueButton, false);
+                if (!quotePanel.hidden) {
+                    quotePanel.focus({ preventScroll: true });
+                }
+
+                if (message) {
+                    message.classList.add('info');
+                    message.textContent = window.vrspListing.i18n?.quoteReady || 'Quote ready! Review the details before continuing to payment.';
+                }
             })
-            .then((res) => res.json())
+            .catch((error) => {
+                latestPayload = null;
+                populateQuote(null);
+                setButtonState(continueButton, true);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = error.message || window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.';
+                }
+            })
+            .finally(() => {
+                setButtonState(submitButton, false);
+            });
+    };
+
+    const handleContinue = () => {
+        if (!continueButton) {
+            return;
+        }
+
+        if (!latestPayload) {
+            resetMessage();
+            if (message) {
+                message.classList.add('info');
+                message.textContent = window.vrspListing.i18n?.quoteRequired || 'Request a quote before continuing to secure payment.';
+            }
+            return;
+        }
+
+        resetMessage();
+        setButtonState(continueButton, true);
+        setButtonState(submitButton, true);
+        if (message) {
+            message.classList.add('info');
+            message.textContent = window.vrspListing.i18n?.checkoutPreparing || 'Preparing secure checkout…';
+        }
+
+        fetch(`${vrspListing.api}/booking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(latestPayload),
+        })
+            .then((res) => {
+                if (!res.ok) {
+                    throw new Error(window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.');
+                }
+
+                return res.json();
+            })
             .then((response) => {
                 if (response.error) {
                     throw new Error(response.error);
                 }
 
-                message.classList.add('success');
-                message.textContent = window.vrspListing.i18n?.redirecting || 'Redirecting to secure checkout…';
+                if (message) {
+                    message.classList.add('success');
+                    message.textContent = window.vrspListing.i18n?.redirecting || 'Redirecting to secure checkout…';
+                }
+
                 if (response.checkout_url) {
                     window.location.href = response.checkout_url;
                 }
             })
             .catch((error) => {
-                message.classList.add('error');
-                message.textContent = error.message || window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.';
+                setButtonState(continueButton, false);
+                setButtonState(submitButton, false);
+                if (message) {
+                    message.classList.add('error');
+                    message.textContent = error.message || window.vrspListing.i18n?.genericError || 'Unable to process booking. Please try again.';
+                }
+            })
+            .finally(() => {
+                setButtonState(submitButton, false);
+                if (latestPayload) {
+                    setButtonState(continueButton, false);
+                }
             });
     };
 
     loadAvailability();
 
     if (form) {
-        form.addEventListener('submit', handleSubmit);
+        form.addEventListener('submit', handleQuote);
+        form.addEventListener('input', () => {
+            if (!latestPayload) {
+                return;
+            }
+
+            latestPayload = null;
+            populateQuote(null);
+            setButtonState(continueButton, true);
+            resetMessage();
+        });
+    }
+
+    if (continueButton) {
+        continueButton.addEventListener('click', handleContinue);
     }
 })();

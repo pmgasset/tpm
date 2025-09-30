@@ -36,6 +36,7 @@ $this->views_dir = rtrim( VRSP_PLUGIN_DIR, '/\\' ) . '/admin/views/';
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
         add_action( 'admin_post_vrsp_approve_booking', [ $this, 'handle_approve_booking' ] );
+        add_action( 'admin_post_vrsp_update_booking', [ $this, 'handle_update_booking' ] );
         add_action( 'admin_notices', [ $this, 'maybe_notice' ] );
     }
 
@@ -156,6 +157,86 @@ $this->render_view(
         exit;
     }
 
+    public function handle_update_booking(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You do not have permission to update bookings.', 'vr-single-property' ) );
+        }
+
+        $booking_id = isset( $_POST['booking_id'] ) ? absint( $_POST['booking_id'] ) : 0;
+        if ( ! $booking_id || 'vrsp_booking' !== get_post_type( $booking_id ) ) {
+            wp_safe_redirect( admin_url( 'admin.php?page=vrsp-bookings' ) );
+            exit;
+        }
+
+        check_admin_referer( 'vrsp-update-booking_' . $booking_id );
+
+        $previous_admin_status = get_post_meta( $booking_id, '_vrsp_admin_status', true );
+        $allowed_admin_status  = [ 'initiated', 'pending_admin', 'approved', 'cancelled' ];
+        $admin_status          = isset( $_POST['vrsp_admin_status'] ) ? sanitize_text_field( wp_unslash( $_POST['vrsp_admin_status'] ) ) : $previous_admin_status;
+        if ( ! in_array( $admin_status, $allowed_admin_status, true ) ) {
+            $admin_status = $previous_admin_status ?: 'initiated';
+        }
+
+        update_post_meta( $booking_id, '_vrsp_admin_status', $admin_status );
+
+        $deposit_paid = isset( $_POST['vrsp_deposit_paid'] ) ? 1 : 0;
+        $balance_paid = isset( $_POST['vrsp_balance_paid'] ) ? 1 : 0;
+
+        if ( $deposit_paid ) {
+            update_post_meta( $booking_id, '_vrsp_deposit_paid', 1 );
+        } else {
+            delete_post_meta( $booking_id, '_vrsp_deposit_paid' );
+        }
+
+        if ( $balance_paid ) {
+            update_post_meta( $booking_id, '_vrsp_balance_paid', 1 );
+        } else {
+            delete_post_meta( $booking_id, '_vrsp_balance_paid' );
+        }
+
+        $post_statuses = get_post_stati( [ 'internal' => false ] );
+        $post_status   = isset( $_POST['vrsp_post_status'] ) ? sanitize_key( wp_unslash( $_POST['vrsp_post_status'] ) ) : get_post_status( $booking_id );
+
+        if ( in_array( $post_status, $post_statuses, true ) && get_post_status( $booking_id ) !== $post_status ) {
+            wp_update_post(
+                [
+                    'ID'          => $booking_id,
+                    'post_status' => $post_status,
+                ]
+            );
+        }
+
+        if ( 'approved' === $admin_status && 'approved' !== $previous_admin_status ) {
+            update_post_meta( $booking_id, '_vrsp_approved_by', get_current_user_id() );
+            update_post_meta( $booking_id, '_vrsp_approved_at', current_time( 'mysql' ) );
+
+            if ( 'publish' !== get_post_status( $booking_id ) ) {
+                wp_update_post(
+                    [
+                        'ID'          => $booking_id,
+                        'post_status' => 'publish',
+                    ]
+                );
+            }
+
+            do_action( 'vrsp_booking_confirmed', $booking_id );
+        } elseif ( 'pending_admin' === $admin_status && 'pending_admin' !== $previous_admin_status ) {
+            do_action( 'vrsp_booking_pending_admin', $booking_id );
+        }
+
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'page'        => 'vrsp-bookings',
+                    'vrsp_notice' => 'updated',
+                    'booking'     => $booking_id,
+                ],
+                admin_url( 'admin.php' )
+            )
+        );
+        exit;
+    }
+
     public function maybe_notice(): void {
         if ( empty( $_GET['vrsp_notice'] ) ) {
             return;
@@ -163,6 +244,8 @@ $this->render_view(
 
         if ( 'approved' === $_GET['vrsp_notice'] ) {
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Reservation approved and sent to check-in.', 'vr-single-property' ) . '</p></div>';
+        } elseif ( 'updated' === $_GET['vrsp_notice'] ) {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Booking details updated.', 'vr-single-property' ) . '</p></div>';
         }
     }
 
