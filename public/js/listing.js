@@ -8,14 +8,25 @@
             return;
         }
 
-        const form = widget.querySelector('.vrsp-form');
-        const quotePanel = widget.querySelector('.vrsp-quote');
-        const message = widget.querySelector('.vrsp-message');
-        const submitButton = widget.querySelector('.vrsp-form__submit');
-        const continueButton = widget.querySelector('.vrsp-form__continue');
-        const availability = widget.querySelector('.vrsp-availability');
-        const availabilityCalendar = widget.querySelector('.vrsp-availability__calendar');
-        const rateList = widget.querySelector('.vrsp-availability__rate-list');
+        const selectors = {
+            form: listingData?.selectors?.form || '.vrsp-form',
+            quote: listingData?.selectors?.quote || '.vrsp-quote',
+            message: listingData?.selectors?.message || '.vrsp-message',
+            submit: listingData?.selectors?.submit || '.vrsp-form__submit',
+            continueButton: listingData?.selectors?.continue || '.vrsp-form__continue',
+            availability: listingData?.selectors?.availability || '.vrsp-availability',
+            availabilityCalendar: listingData?.selectors?.availabilityCalendar || '.vrsp-availability__calendar',
+            rateList: listingData?.selectors?.rateList || '.vrsp-availability__rate-list',
+        };
+
+        const form = widget.querySelector(selectors.form);
+        const quotePanel = widget.querySelector(selectors.quote);
+        const message = widget.querySelector(selectors.message);
+        const submitButton = widget.querySelector(selectors.submit);
+        const continueButton = widget.querySelector(selectors.continueButton);
+        const availability = widget.querySelector(selectors.availability);
+        const availabilityCalendar = widget.querySelector(selectors.availabilityCalendar);
+        const rateList = widget.querySelector(selectors.rateList);
 
         if (!form || !quotePanel || !submitButton || !continueButton || !availability) {
             return;
