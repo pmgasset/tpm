@@ -1,3 +1,4 @@
+
 ;(function (window, document) {
     'use strict';
 
@@ -78,6 +79,7 @@
                     tag.textContent = event.start + ' → ' + event.end;
                     availabilityCalendar.appendChild(tag);
                 }
+
             }
         }
 
@@ -86,7 +88,10 @@
             var rates = [];
             if (data && Array.isArray(data.rates)) {
                 rates = data.rates;
+
             }
+        }
+
 
             var maxRates = Math.min(rates.length, 6);
             for (var j = 0; j < maxRates; j += 1) {
@@ -98,6 +103,7 @@
                 pill.className = 'rate-pill';
                 pill.textContent = rate.date + ': ' + formatCurrency(rate.amount);
                 rateList.appendChild(pill);
+
             }
         }
     }
@@ -107,6 +113,7 @@
         var quotePanel = state.quotePanel;
         var formatCurrency = state.formatCurrency;
         var listingData = state.listingData;
+
 
         if (!quotePanel || !widget) {
             return;
@@ -128,8 +135,10 @@
             var target = widget.querySelector(selector);
             if (target) {
                 target.textContent = value;
+
             }
         }
+
 
         write('nights', quote.nights);
         write('subtotal', formatCurrency(quote.subtotal));
@@ -153,9 +162,11 @@
                     'depositNote',
                     'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.'
                 );
+
             }
         }
     }
+
 
     function setButtonState(button, disabled) {
         if (!button) {
@@ -368,11 +379,13 @@
                 if (currentId === state.quoteRequestId) {
                     if (supportsAbortController) {
                         state.quoteController = null;
+
                     }
                     setButtonState(state.submitButton, false);
                 }
             });
     }
+
 
     function scheduleQuote(state) {
         if (state.quoteDebounceId) {
@@ -479,9 +492,11 @@
                 var extra = continueButtons[i];
                 if (extra && extra.parentNode) {
                     extra.parentNode.removeChild(extra);
+
                 }
             }
         }
+
 
         if (!form || !quotePanel || !continueButton || !availability) {
             return;
@@ -507,9 +522,11 @@
             quoteDebounceId: null,
             quoteRequestId: 0,
             latestPayload: null
+
         };
 
         widgetState.set(widget, state);
+
 
         requestAvailability(state);
         scheduleQuote(state);
@@ -519,6 +536,7 @@
         });
 
         var handleChange = function () {
+
             state.latestPayload = null;
             populateQuote(state, null);
             setButtonState(state.continueButton, true);
@@ -529,26 +547,33 @@
         form.addEventListener('input', handleChange);
         form.addEventListener('change', handleChange);
 
+
         continueButton.addEventListener('click', function () {
             handleContinue(state);
         });
 
+
         widget.dataset.vrspReady = 'true';
     }
+
 
     function init(isRefresh) {
         var listingData = window.vrspListing;
         var widgets = document.querySelectorAll('[data-vrsp-widget], .vrsp-booking-widget');
 
+
         if (!widgets.length || typeof listingData === 'undefined') {
             if (!isRefresh && initAttempts < INIT_RETRY_LIMIT) {
                 initAttempts += 1;
+
                 window.setTimeout(function () {
                     init(false);
                 }, INIT_RETRY_DELAY);
+
             }
             return;
         }
+
 
         for (var i = 0; i < widgets.length; i += 1) {
             mountWidget(widgets[i], listingData);
@@ -561,12 +586,15 @@
             init(true);
         },
         version: '1.1.0'
+
     };
 
     if (document.readyState === 'loading') {
+
         document.addEventListener('DOMContentLoaded', function () {
             init(false);
         }, { once: true });
+
     } else {
         init(false);
     }

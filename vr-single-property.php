@@ -3,7 +3,9 @@
  * Plugin Name:       VR Single Property
  * Plugin URI:        https://example.com/vr-single-property
  * Description:       Single-property vacation rental system with booking, payments, dynamic pricing, and operations automations.
+
  * Version:           0.1.5
+
  * Author:            VR Single Property
  * Author URI:        https://example.com
  * Text Domain:       vr-single-property
@@ -25,7 +27,9 @@ echo '<div class="notice notice-error"><p>' . esc_html__( 'VR Single Property re
 return;
 }
 
+
 define( 'VRSP_VERSION', '0.1.5' );
+
 define( 'VRSP_PLUGIN_FILE', __FILE__ );
 define( 'VRSP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VRSP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
