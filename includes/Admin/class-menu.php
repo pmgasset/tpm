@@ -60,9 +60,10 @@ public function register_menu(): void {
         );
 
         add_submenu_page( 'vrsp-dashboard', __( 'Settings', 'vr-single-property' ), __( 'Settings', 'vr-single-property' ), 'manage_options', 'vrsp-settings', [ $this, 'render_settings_page' ] );
-add_submenu_page( 'vrsp-dashboard', __( 'Bookings', 'vr-single-property' ), __( 'Bookings', 'vr-single-property' ), 'manage_options', 'vrsp-bookings', [ $this, 'render_bookings_page' ] );
-add_submenu_page( 'vrsp-dashboard', __( 'Logs', 'vr-single-property' ), __( 'Logs', 'vr-single-property' ), 'manage_options', 'vrsp-logs', [ $this, 'render_logs_page' ] );
-}
+        add_submenu_page( 'vrsp-dashboard', __( 'Messaging Templates', 'vr-single-property' ), __( 'Messaging Templates', 'vr-single-property' ), 'manage_options', 'vrsp-messaging', [ $this, 'render_messaging_page' ] );
+        add_submenu_page( 'vrsp-dashboard', __( 'Bookings', 'vr-single-property' ), __( 'Bookings', 'vr-single-property' ), 'manage_options', 'vrsp-bookings', [ $this, 'render_bookings_page' ] );
+        add_submenu_page( 'vrsp-dashboard', __( 'Logs', 'vr-single-property' ), __( 'Logs', 'vr-single-property' ), 'manage_options', 'vrsp-logs', [ $this, 'render_logs_page' ] );
+    }
 
 public function register_settings(): void {
 register_setting( 'vrsp_settings', Settings::OPTION_KEY, [ $this, 'sanitize_settings' ] );
@@ -91,14 +92,23 @@ public function render_dashboard(): void {
 $this->render_view( 'dashboard' );
 }
 
-public function render_settings_page(): void {
-$this->render_view(
- 'settings',
- [
- 'settings' => $this->settings,
- ]
-);
-}
+    public function render_settings_page(): void {
+        $this->render_view(
+            'settings',
+            [
+                'settings' => $this->settings,
+            ]
+        );
+    }
+
+    public function render_messaging_page(): void {
+        $this->render_view(
+            'messaging',
+            [
+                'settings' => $this->settings,
+            ]
+        );
+    }
 
     public function render_bookings_page(): void {
         $bookings = get_posts(
@@ -171,6 +181,8 @@ $this->render_view(
         check_admin_referer( 'vrsp-update-booking_' . $booking_id );
 
         $previous_admin_status = get_post_meta( $booking_id, '_vrsp_admin_status', true );
+        $previous_deposit_paid = (bool) get_post_meta( $booking_id, '_vrsp_deposit_paid', true );
+        $previous_balance_paid = (bool) get_post_meta( $booking_id, '_vrsp_balance_paid', true );
         $allowed_admin_status  = [ 'initiated', 'pending_admin', 'approved', 'cancelled' ];
         $admin_status          = isset( $_POST['vrsp_admin_status'] ) ? sanitize_text_field( wp_unslash( $_POST['vrsp_admin_status'] ) ) : $previous_admin_status;
         if ( ! in_array( $admin_status, $allowed_admin_status, true ) ) {
@@ -192,6 +204,14 @@ $this->render_view(
             update_post_meta( $booking_id, '_vrsp_balance_paid', 1 );
         } else {
             delete_post_meta( $booking_id, '_vrsp_balance_paid' );
+        }
+
+        if ( $deposit_paid && ! $previous_deposit_paid ) {
+            do_action( 'vrsp_booking_payment_received', $booking_id, 'deposit' );
+        }
+
+        if ( $balance_paid && ! $previous_balance_paid ) {
+            do_action( 'vrsp_booking_payment_received', $booking_id, 'balance' );
         }
 
         $post_statuses = get_post_stati( [ 'internal' => false ] );

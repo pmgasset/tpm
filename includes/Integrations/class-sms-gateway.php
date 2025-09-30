@@ -86,9 +86,20 @@ $booking_id = absint( $payload['booking'] ?? 0 );
         $this->send_sms( $number, $message );
     }
 
-private function send_sms( string $to, string $message ): void {
-$username = $this->settings->get( 'sms_api_username', '' );
-$password = $this->settings->get( 'sms_api_password', '' );
+    public function send_message( string $to, string $message ): void {
+        $to      = trim( preg_replace( '/[^\d+]/', '', $to ) );
+        $message = trim( $message );
+
+        if ( '' === $to || '' === $message ) {
+            return;
+        }
+
+        $this->send_sms( $to, $message );
+    }
+
+    private function send_sms( string $to, string $message ): void {
+        $username = $this->settings->get( 'sms_api_username', '' );
+        $password = $this->settings->get( 'sms_api_password', '' );
 
 if ( ! $username || ! $password ) {
 $this->logger->warning( 'SMS credentials missing.' );
