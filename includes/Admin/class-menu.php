@@ -4,6 +4,7 @@ namespace VRSP\Admin;
 use VRSP\Integrations\IcalSync;
 use VRSP\Integrations\SmsGateway;
 use VRSP\Integrations\StripeGateway;
+use VRSP\PostTypes\RentalPostType;
 use VRSP\Rules\BusinessRules;
 use VRSP\Settings;
 use VRSP\Utilities\Logger;
@@ -37,6 +38,7 @@ $this->views_dir = rtrim( VRSP_PLUGIN_DIR, '/\\' ) . '/admin/views/';
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
         add_action( 'admin_post_vrsp_approve_booking', [ $this, 'handle_approve_booking' ] );
         add_action( 'admin_post_vrsp_update_booking', [ $this, 'handle_update_booking' ] );
+        add_action( 'admin_post_vrsp_save_rental_profile', [ $this, 'handle_save_rental_profile' ] );
         add_action( 'admin_notices', [ $this, 'maybe_notice' ] );
     }
 
@@ -257,6 +259,44 @@ $this->render_view( 'dashboard' );
         exit;
     }
 
+    public function handle_save_rental_profile(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You do not have permission to update the rental profile.', 'vr-single-property' ) );
+        }
+
+        check_admin_referer( 'vrsp_save_rental_profile', '_vrsp_rental_profile_nonce' );
+
+        $rental_id = isset( $_POST['rental_id'] ) ? absint( $_POST['rental_id'] ) : 0;
+
+        if ( ! $rental_id || 'vrsp_rental' !== get_post_type( $rental_id ) ) {
+            wp_safe_redirect( admin_url( 'admin.php?page=vrsp-settings' ) );
+            exit;
+        }
+
+        $raw = isset( $_POST['vrsp_meta'] ) ? (array) wp_unslash( $_POST['vrsp_meta'] ) : [];
+
+        foreach ( array_keys( RentalPostType::get_meta_defaults() ) as $meta_key ) {
+            $sanitized = RentalPostType::sanitize_meta_value( $meta_key, $raw[ $meta_key ] ?? null );
+
+            if ( null === $sanitized || ( is_string( $sanitized ) && '' === $sanitized ) || ( is_array( $sanitized ) && [] === $sanitized ) ) {
+                delete_post_meta( $rental_id, $meta_key );
+            } else {
+                update_post_meta( $rental_id, $meta_key, $sanitized );
+            }
+        }
+
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'page'        => 'vrsp-settings',
+                    'vrsp_notice' => 'rental-profile-saved',
+                ],
+                admin_url( 'admin.php' )
+            )
+        );
+        exit;
+    }
+
     public function maybe_notice(): void {
         if ( empty( $_GET['vrsp_notice'] ) ) {
             return;
@@ -266,6 +306,8 @@ $this->render_view( 'dashboard' );
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Reservation approved and sent to check-in.', 'vr-single-property' ) . '</p></div>';
         } elseif ( 'updated' === $_GET['vrsp_notice'] ) {
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Booking details updated.', 'vr-single-property' ) . '</p></div>';
+        } elseif ( 'rental-profile-saved' === $_GET['vrsp_notice'] ) {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Rental profile updated.', 'vr-single-property' ) . '</p></div>';
         }
     }
 

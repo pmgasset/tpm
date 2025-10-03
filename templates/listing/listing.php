@@ -6,13 +6,40 @@ if ( ! isset( $rental ) || ! $rental instanceof \WP_Post ) {
 $options   = get_option( \VRSP\Settings::OPTION_KEY, [] );
 $base_rate = isset( $options['base_rate'] ) ? (float) $options['base_rate'] : 200;
 $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
+
+$title   = get_the_title( $rental );
+$excerpt = get_the_excerpt( $rental );
 ?>
-<div class="vrsp-booking-widget" data-vrsp-widget>
-    <section class="vrsp-card vrsp-card--availability">
-        <header class="vrsp-card__header">
-            <h2><?php esc_html_e( 'Check Availability', 'vr-single-property' ); ?></h2>
-        </header>
-        <div class="vrsp-availability" data-vrsp="availability" data-base-rate="<?php echo esc_attr( number_format_i18n( $base_rate, 2 ) ); ?>" data-currency="<?php echo esc_attr( $currency ); ?>">
+
+<article class="vrsp-listing" aria-labelledby="vrsp-listing-title">
+    <header class="vrsp-listing__header">
+        <?php if ( $title ) : ?>
+            <h1 id="vrsp-listing-title" class="vrsp-listing__title"><?php echo esc_html( $title ); ?></h1>
+        <?php endif; ?>
+
+        <?php if ( $excerpt ) : ?>
+            <div class="vrsp-listing__excerpt"><?php echo wp_kses_post( $excerpt ); ?></div>
+        <?php endif; ?>
+
+        <?php if ( has_post_thumbnail( $rental ) ) : ?>
+            <figure class="vrsp-listing__featured-image">
+                <?php echo get_the_post_thumbnail( $rental, 'large' ); ?>
+            </figure>
+        <?php endif; ?>
+    </header>
+
+    <?php if ( ! empty( $content ) ) : ?>
+        <section class="vrsp-listing__details">
+            <?php echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Content sanitized upstream. ?>
+        </section>
+    <?php endif; ?>
+
+    <div class="vrsp-booking-widget" data-vrsp-widget>
+        <section class="vrsp-card vrsp-card--availability">
+            <header class="vrsp-card__header">
+                <h2><?php esc_html_e( 'Check Availability', 'vr-single-property' ); ?></h2>
+            </header>
+            <div class="vrsp-availability" data-vrsp="availability" data-base-rate="<?php echo esc_attr( number_format_i18n( $base_rate, 2 ) ); ?>" data-currency="<?php echo esc_attr( $currency ); ?>">
             <div class="vrsp-availability__calendar" data-vrsp="calendar" aria-live="polite"></div>
             <div class="vrsp-availability__details">
                 <div class="vrsp-availability__dates">
@@ -127,5 +154,18 @@ $currency  = isset( $options['currency'] ) ? $options['currency'] : 'USD';
             </div>
         </form>
         <div class="vrsp-message" data-vrsp="message" aria-live="polite"></div>
+        </section>
+    </div>
+</article>
+
+<?php if ( ! empty( $block_content ) ) : ?>
+    <section class="vrsp-listing__supplemental">
+        <?php echo wp_kses_post( $block_content ); ?>
     </section>
-</div>
+<?php endif; ?>
+
+<?php if ( ! empty( $schema ) ) : ?>
+    <script type="application/ld+json">
+        <?php echo wp_json_encode( $schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); ?>
+    </script>
+<?php endif; ?>

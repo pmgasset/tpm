@@ -2,6 +2,7 @@
 namespace VRSP\Blocks;
 
 use VRSP\Integrations\StripeGateway;
+use VRSP\PostTypes\RentalPostType;
 use VRSP\Rules\BusinessRules;
 use VRSP\Settings;
 use VRSP\Utilities\Logger;
@@ -97,6 +98,7 @@ class ListingBlock {
                     'block_content' => $content,
                     'attrs'         => $attributes,
                     'rental'        => $rental,
+                    'schema'        => $this->build_vacation_rental_schema( $rental ),
                 ]
             );
         } catch ( \Throwable $exception ) {
@@ -190,6 +192,131 @@ class ListingBlock {
         }
 
         return \wp_kses_post( $content );
+    }
+
+    private function build_vacation_rental_schema( WP_Post $rental ): array {
+        $permalink = get_permalink( $rental );
+
+        if ( ! $permalink ) {
+            return [];
+        }
+
+        $meta         = RentalPostType::get_rental_meta( $rental->ID );
+        $description  = trim( wp_strip_all_tags( get_the_excerpt( $rental ) ) );
+        $raw_content  = trim( wp_strip_all_tags( $rental->post_content ) );
+        $description  = $description ?: $raw_content;
+        $description  = $description ? wp_trim_words( $description, 55, '…' ) : '';
+        $images       = [];
+        $featured     = get_the_post_thumbnail_url( $rental, 'full' );
+
+        if ( $featured ) {
+            $images[] = esc_url_raw( $featured );
+        }
+
+        $attachments = get_attached_media( 'image', $rental->ID );
+        foreach ( $attachments as $attachment ) {
+            $url = wp_get_attachment_image_url( $attachment->ID, 'full' );
+            if ( $url ) {
+                $images[] = esc_url_raw( $url );
+            }
+        }
+
+        $images = array_values( array_unique( array_filter( $images ) ) );
+
+        $schema = [
+            '@context' => 'https://schema.org',
+            '@type'    => 'VacationRental',
+            '@id'      => trailingslashit( $permalink ) . '#vacationRental',
+            'name'     => get_the_title( $rental ),
+            'url'      => $permalink,
+        ];
+
+        if ( $description ) {
+            $schema['description'] = $description;
+        }
+
+        if ( ! empty( $images ) ) {
+            $schema['image'] = $images;
+        }
+
+        if ( ! empty( $meta['vrsp_address'] ) ) {
+            $address = preg_replace( '/\s*\R+\s*/', ', ', (string) $meta['vrsp_address'] );
+            $schema['address'] = [
+                '@type'         => 'PostalAddress',
+                'streetAddress' => $address,
+            ];
+        }
+
+        if ( null !== $meta['vrsp_latitude'] && null !== $meta['vrsp_longitude'] ) {
+            $schema['geo'] = [
+                '@type'     => 'GeoCoordinates',
+                'latitude'  => $meta['vrsp_latitude'],
+                'longitude' => $meta['vrsp_longitude'],
+            ];
+        }
+
+        if ( null !== $meta['vrsp_max_guests'] ) {
+            $schema['maximumAttendeeCapacity'] = (int) $meta['vrsp_max_guests'];
+        }
+
+        if ( ! empty( $meta['vrsp_property_type'] ) ) {
+            $schema['additionalPropertyType'] = $meta['vrsp_property_type'];
+        }
+
+        if ( ! empty( $meta['vrsp_amenities'] ) && is_array( $meta['vrsp_amenities'] ) ) {
+            $schema['amenityFeature'] = array_map(
+                static function ( string $amenity ) {
+                    return [
+                        '@type' => 'LocationFeatureSpecification',
+                        'name'  => $amenity,
+                    ];
+                },
+                $meta['vrsp_amenities']
+            );
+        }
+
+        if ( ! empty( $meta['vrsp_regulatory_ids'] ) ) {
+            $schema['regulatoryID'] = $meta['vrsp_regulatory_ids'];
+        }
+
+        $base_rate = (float) $this->settings->get( 'base_rate', 0 );
+        $currency  = (string) $this->settings->get( 'currency', 'USD' );
+
+        if ( $base_rate > 0 ) {
+            $schema['offers'] = [
+                '@type'         => 'Offer',
+                'price'         => number_format( $base_rate, 2, '.', '' ),
+                'priceCurrency' => $currency ?: 'USD',
+                'availability'  => 'https://schema.org/InStock',
+                'url'           => $permalink,
+            ];
+        }
+
+        $availability_endpoint = esc_url_raw( rest_url( 'vr/v1/availability' ) );
+        $booking_endpoint      = esc_url_raw( rest_url( 'vr/v1/booking' ) );
+
+        $actions = [];
+
+        if ( $availability_endpoint ) {
+            $actions[] = [
+                '@type'       => 'SearchAction',
+                'target'      => $availability_endpoint . '?arrival={arrival}&departure={departure}',
+                'query-input' => 'required arrival=arrival required departure=departure',
+            ];
+        }
+
+        if ( $booking_endpoint ) {
+            $actions[] = [
+                '@type'  => 'ReserveAction',
+                'target' => $booking_endpoint,
+            ];
+        }
+
+        if ( ! empty( $actions ) ) {
+            $schema['potentialAction'] = $actions;
+        }
+
+        return $schema;
     }
 
     private static function enter_render(): bool {

@@ -4,9 +4,65 @@ return;
 }
 
 $values = get_option( \VRSP\Settings::OPTION_KEY, $settings->get_defaults() );
+$rental_id = function_exists( 'vrsp_get_primary_rental_id' ) ? vrsp_get_primary_rental_id() : 0;
+$rental    = $rental_id ? get_post( $rental_id ) : null;
+$rental_meta = $rental instanceof WP_Post ? \VRSP\PostTypes\RentalPostType::get_rental_meta( $rental_id ) : \VRSP\PostTypes\RentalPostType::get_meta_defaults();
+$amenities_value = ! empty( $rental_meta['vrsp_amenities'] ) ? implode( "\n", (array) $rental_meta['vrsp_amenities'] ) : '';
+$regulatory_value = ! empty( $rental_meta['vrsp_regulatory_ids'] ) ? implode( "\n", (array) $rental_meta['vrsp_regulatory_ids'] ) : '';
 ?>
 <div class="wrap vrsp-admin">
 <h1><?php esc_html_e( 'VR Single Property Settings', 'vr-single-property' ); ?></h1>
+<?php if ( $rental instanceof WP_Post ) : ?>
+<h2><?php esc_html_e( 'Rental Profile', 'vr-single-property' ); ?></h2>
+<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="vrsp-admin__rental-profile">
+<?php wp_nonce_field( 'vrsp_save_rental_profile', '_vrsp_rental_profile_nonce' ); ?>
+<input type="hidden" name="action" value="vrsp_save_rental_profile" />
+<input type="hidden" name="rental_id" value="<?php echo esc_attr( $rental_id ); ?>" />
+<table class="form-table" role="presentation">
+<tr>
+<th scope="row"><?php esc_html_e( 'Rental', 'vr-single-property' ); ?></th>
+<td><strong><?php echo esc_html( get_the_title( $rental ) ); ?></strong> <a href="<?php echo esc_url( get_edit_post_link( $rental_id ) ); ?>"><?php esc_html_e( 'Edit', 'vr-single-property' ); ?></a></td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Street address', 'vr-single-property' ); ?></th>
+<td><textarea name="vrsp_meta[vrsp_address]" rows="3" class="large-text"><?php echo esc_textarea( $rental_meta['vrsp_address'] ?? '' ); ?></textarea></td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Latitude', 'vr-single-property' ); ?></th>
+<td><input type="number" name="vrsp_meta[vrsp_latitude]" step="any" value="<?php echo esc_attr( null !== $rental_meta['vrsp_latitude'] ? $rental_meta['vrsp_latitude'] : '' ); ?>" /></td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Longitude', 'vr-single-property' ); ?></th>
+<td><input type="number" name="vrsp_meta[vrsp_longitude]" step="any" value="<?php echo esc_attr( null !== $rental_meta['vrsp_longitude'] ? $rental_meta['vrsp_longitude'] : '' ); ?>" /></td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Maximum guests', 'vr-single-property' ); ?></th>
+<td><input type="number" name="vrsp_meta[vrsp_max_guests]" min="0" step="1" value="<?php echo esc_attr( null !== $rental_meta['vrsp_max_guests'] ? $rental_meta['vrsp_max_guests'] : '' ); ?>" /></td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Property type', 'vr-single-property' ); ?></th>
+<td><input type="text" name="vrsp_meta[vrsp_property_type]" class="regular-text" value="<?php echo esc_attr( $rental_meta['vrsp_property_type'] ?? '' ); ?>" /></td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Amenities', 'vr-single-property' ); ?></th>
+<td>
+<textarea name="vrsp_meta[vrsp_amenities]" rows="4" class="large-text"><?php echo esc_textarea( $amenities_value ); ?></textarea>
+<p class="description"><?php esc_html_e( 'Enter one amenity per line.', 'vr-single-property' ); ?></p>
+</td>
+</tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'Regulatory IDs', 'vr-single-property' ); ?></th>
+<td>
+<textarea name="vrsp_meta[vrsp_regulatory_ids]" rows="3" class="large-text"><?php echo esc_textarea( $regulatory_value ); ?></textarea>
+<p class="description"><?php esc_html_e( 'Enter one ID per line.', 'vr-single-property' ); ?></p>
+</td>
+</tr>
+</table>
+<?php submit_button( __( 'Save Rental Profile', 'vr-single-property' ) ); ?>
+</form>
+<?php else : ?>
+<div class="notice notice-warning inline"><p><?php esc_html_e( 'Publish a rental to manage its profile information here.', 'vr-single-property' ); ?></p></div>
+<?php endif; ?>
 <form method="post" action="options.php">
 <?php settings_fields( 'vrsp_settings' ); ?>
 <table class="form-table" role="presentation">
