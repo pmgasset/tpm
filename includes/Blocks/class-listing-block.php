@@ -131,6 +131,13 @@ class ListingBlock {
                 'rules'    => $this->rules->get_rules(),
                 'i18n'     => [
                     'availabilityEmpty' => __( 'Your preferred dates are open!', 'vr-single-property' ),
+                    'availabilityPrompt' => __( 'Start by selecting your check-in and checkout dates.', 'vr-single-property' ),
+                    'availabilityChecking' => __( 'Checking availability…', 'vr-single-property' ),
+                    'availabilityAvailable' => __( 'Great news! Your dates are available.', 'vr-single-property' ),
+                    'availabilityUnavailable' => __( 'Those dates are unavailable. Please choose another stay.', 'vr-single-property' ),
+                    'availabilitySuggestion' => __( 'Next available stay: %1$s to %2$s.', 'vr-single-property' ),
+                    'availabilityNoSuggestion' => __( "We'll follow up shortly with the next available dates.", 'vr-single-property' ),
+                    'availabilityApply' => __( 'Use these dates', 'vr-single-property' ),
                     'quotePrompt'       => __( 'Select arrival and departure dates to see pricing.', 'vr-single-property' ),
                     'quoteLoading'      => __( 'Calculating pricing…', 'vr-single-property' ),
                     'depositNote'       => __( 'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.', 'vr-single-property' ),

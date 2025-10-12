@@ -38,6 +38,65 @@
     font-size: 0.95rem;
 }
 
+.vrsp-card--dates .vrsp-availability {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(59, 130, 246, 0.08));
+}
+
+.vrsp-availability {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border-radius: 12px;
+    background-color: rgba(37, 99, 235, 0.06);
+}
+
+.vrsp-availability__status {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.vrsp-availability__suggestion {
+    font-size: 0.95rem;
+    color: #475569;
+}
+
+.vrsp-availability__apply {
+    justify-self: start;
+    border: none;
+    border-radius: 999px;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    color: #ffffff;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vrsp-availability__apply:hover,
+.vrsp-availability__apply:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
+    outline: none;
+}
+
+.vrsp-availability__apply:focus-visible {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+}
+
+.vrsp-availability.is-checking .vrsp-availability__status {
+    color: #2563eb;
+}
+
+.vrsp-availability.is-available .vrsp-availability__status {
+    color: #047857;
+}
+
+.vrsp-availability.is-unavailable .vrsp-availability__status,
+.vrsp-availability.is-error .vrsp-availability__status {
+    color: #b91c1c;
+}
+
 .vrsp-availability__calendar {
     min-height: 160px;
     background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(59, 130, 246, 0.08));
@@ -64,6 +123,14 @@
     display: grid;
     gap: 1.25rem;
     margin-top: 1rem;
+}
+
+.vrsp-form__summary {
+    margin-top: 1.5rem;
+}
+
+.vrsp-form__summary .vrsp-availability__details {
+    margin-top: 0;
 }
 
 .vrsp-availability__dates h3,
