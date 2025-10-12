@@ -156,6 +156,62 @@
         node.textContent = text;
     }
 
+    function formatSuggestionRange(state, suggestion) {
+        if (!suggestion || !suggestion.start || !suggestion.end) {
+            return '';
+        }
+
+        var listingData = state ? state.listingData : null;
+        var template = getText(listingData, 'availabilitySuggestion', 'Next available stay: %1$s to %2$s.');
+        var startLabel = formatDate(suggestion.start);
+        var endLabel = formatDate(suggestion.end);
+
+        return template.replace('%1$s', startLabel).replace('%2$s', endLabel);
+    }
+
+    function setAvailabilityState(state, type, message, suggestionText, suggestionRange) {
+        if (!state || !state.availability) {
+            return;
+        }
+
+        var container = state.availability;
+        var classes = ['is-available', 'is-unavailable', 'is-idle', 'is-checking', 'is-error'];
+
+        for (var i = 0; i < classes.length; i += 1) {
+            container.classList.remove(classes[i]);
+        }
+
+        if (type) {
+            container.classList.add('is-' + type);
+        }
+
+        if (state.availabilityStatus) {
+            state.availabilityStatus.textContent = message || '';
+        }
+
+        if (state.availabilitySuggestion) {
+            state.availabilitySuggestion.textContent = suggestionText || '';
+        }
+
+        if (state.availabilityApply) {
+            if (suggestionRange && suggestionRange.start && suggestionRange.end) {
+                state.availabilityApply.hidden = false;
+                state.availabilityApply.textContent = getText(state.listingData, 'availabilityApply', 'Use these dates');
+            } else {
+                state.availabilityApply.hidden = true;
+            }
+        }
+
+        state.suggestedRange = suggestionRange && suggestionRange.start && suggestionRange.end
+            ? {
+                  start: suggestionRange.start,
+                  end: suggestionRange.end
+              }
+            : null;
+
+        state.availabilityStatusType = type || '';
+    }
+
     function parseISODate(value) {
         if (!value || typeof value !== 'string') {
             return null;
@@ -278,6 +334,128 @@
         }
 
         return diff;
+    }
+
+    function addDays(date, days) {
+        if (!(date instanceof Date)) {
+            return null;
+        }
+
+        var clone = new Date(date.getTime());
+        clone.setDate(clone.getDate() + days);
+        return clone;
+    }
+
+    function toISODate(date) {
+        if (!(date instanceof Date)) {
+            return '';
+        }
+
+        var month = (date.getMonth() + 1).toString().padStart(2, '0');
+        var day = date.getDate().toString().padStart(2, '0');
+
+        return date.getFullYear() + '-' + month + '-' + day;
+    }
+
+    function buildBlockedRanges(blocked) {
+        if (!Array.isArray(blocked)) {
+            return [];
+        }
+
+        var ranges = [];
+
+        for (var i = 0; i < blocked.length; i += 1) {
+            var windowItem = blocked[i];
+            if (!windowItem) {
+                continue;
+            }
+
+            var start = parseISODate(windowItem.start);
+            var end = parseISODate(windowItem.end);
+
+            if (!start || !end || !(start instanceof Date) || !(end instanceof Date)) {
+                continue;
+            }
+
+            if (start.getTime() >= end.getTime()) {
+                continue;
+            }
+
+            ranges.push({
+                start: start,
+                end: end
+            });
+        }
+
+        ranges.sort(function (a, b) {
+            return a.start.getTime() - b.start.getTime();
+        });
+
+        return ranges;
+    }
+
+    function findNextAvailableRange(blockedRanges, arrival, departure) {
+        if (!(arrival instanceof Date) || !(departure instanceof Date)) {
+            return null;
+        }
+
+        var nights = differenceInDays(arrival, departure);
+        if (nights === null || nights <= 0) {
+            return null;
+        }
+
+        var blocked = Array.isArray(blockedRanges) ? blockedRanges : [];
+        if (!blocked.length) {
+            return null;
+        }
+        var maxIterations = 365;
+        var candidateStart = new Date(arrival.getTime());
+
+        for (var i = 0; i < maxIterations; i += 1) {
+            var candidateEnd = addDays(candidateStart, nights);
+            if (!(candidateEnd instanceof Date)) {
+                break;
+            }
+
+            var conflict = false;
+            var skipTo = null;
+
+            for (var j = 0; j < blocked.length; j += 1) {
+                var range = blocked[j];
+                if (!range || !(range.start instanceof Date) || !(range.end instanceof Date)) {
+                    continue;
+                }
+
+                if (candidateEnd <= range.start || candidateStart >= range.end) {
+                    continue;
+                }
+
+                conflict = true;
+
+                if (!skipTo || range.end > skipTo) {
+                    skipTo = new Date(range.end.getTime());
+                }
+            }
+
+            if (!conflict) {
+                return {
+                    start: candidateStart,
+                    end: candidateEnd
+                };
+            }
+
+            if (!skipTo) {
+                skipTo = addDays(candidateStart, 1);
+            }
+
+            if (!(skipTo instanceof Date)) {
+                break;
+            }
+
+            candidateStart = skipTo;
+        }
+
+        return null;
     }
 
     function roundCurrency(value) {
@@ -574,31 +752,22 @@
     }
 
     function renderAvailability(state, payload) {
-        var calendar = state.calendar;
+        if (!state) {
+            return;
+        }
 
-        if (calendar) {
-            clearChildren(calendar);
+        var data = payload || {};
+        state.availabilityData = data;
+        state.blockedRanges = buildBlockedRanges(data.blocked || []);
 
-            var blocked = (payload && payload.blocked) || [];
-
-            if (!blocked.length) {
-                var message = document.createElement('p');
-                message.textContent = getText(state.listingData, 'availabilityEmpty', 'Your preferred dates are open!');
-                calendar.appendChild(message);
-            } else {
-                var limit = Math.min(blocked.length, 8);
-                for (var i = 0; i < limit; i += 1) {
-                    var windowItem = blocked[i];
-                    if (!windowItem) {
-                        continue;
-                    }
-
-                    var tag = document.createElement('span');
-                    tag.className = 'vrsp-availability__tag';
-                    tag.textContent = windowItem.start + ' → ' + windowItem.end;
-                    calendar.appendChild(tag);
-                }
-            }
+        if (!state.availabilityStatusType) {
+            setAvailabilityState(
+                state,
+                'idle',
+                getText(state.listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+                '',
+                null
+            );
         }
     }
 
@@ -652,11 +821,25 @@
                 'info',
                 getText(listingData, 'quotePrompt', 'Select arrival and departure dates to see pricing.')
             );
+            setAvailabilityState(
+                state,
+                'idle',
+                getText(listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+                '',
+                null
+            );
             return;
         }
 
         setButtonDisabled(state.continueButton, true);
         writeMessage(state, 'info', getText(listingData, 'quoteLoading', 'Calculating pricing…'));
+        setAvailabilityState(
+            state,
+            'checking',
+            getText(listingData, 'availabilityChecking', 'Checking availability…'),
+            '',
+            null
+        );
 
         if (state.quoteAbort && supportsAbortController) {
             state.quoteAbort.abort();
@@ -677,16 +860,37 @@
 
         fetch(listingData.api + '/quote', options)
             .then(function (response) {
-                if (!response.ok) {
-                    throw new Error(getText(listingData, 'genericError', 'Unable to process booking. Please try again.'));
-                }
-                return response.json();
+                return response
+                    .json()
+                    .catch(function () {
+                        return {};
+                    })
+                    .then(function (data) {
+                        if (!response.ok) {
+                            var message = (data && data.error)
+                                ? data.error
+                                : getText(listingData, 'genericError', 'Unable to process booking. Please try again.');
+                            var error = new Error(message);
+                            error.status = response.status;
+                            error.data = data;
+                            throw error;
+                        }
+
+                        return data;
+                    });
             })
             .then(function (quote) {
                 state.latestPayload = Object.assign({}, payload);
                 state.latestQuote = quote;
 
                 writePricing(state, payload, quote);
+                setAvailabilityState(
+                    state,
+                    'available',
+                    getText(listingData, 'availabilityAvailable', 'Great news! Your dates are available.'),
+                    '',
+                    null
+                );
 
                 if (quote && quote.coupon_error) {
                     setButtonDisabled(state.continueButton, true);
@@ -725,6 +929,43 @@
                 resetPricing(state);
 
                 var fallback = getText(listingData, 'genericError', 'Unable to process booking. Please try again.');
+
+                if (error && error.status === 409) {
+                    var unavailableMessage = error.message || getText(
+                        listingData,
+                        'availabilityUnavailable',
+                        'Those dates are unavailable. Please choose another stay.'
+                    );
+
+                    var arrivalDate = parseISODate(payload.arrival);
+                    var departureDate = parseISODate(payload.departure);
+                    var nextRange = findNextAvailableRange(state.blockedRanges, arrivalDate, departureDate);
+                    var suggestionRange = null;
+                    var suggestionText = '';
+
+                    if (nextRange && nextRange.start && nextRange.end) {
+                        suggestionRange = {
+                            start: toISODate(nextRange.start),
+                            end: toISODate(nextRange.end)
+                        };
+                        suggestionText = formatSuggestionRange(state, suggestionRange);
+                    } else {
+                        suggestionText = getText(
+                            listingData,
+                            'availabilityNoSuggestion',
+                            "We'll follow up shortly with the next available dates."
+                        );
+                    }
+
+                    setAvailabilityState(state, 'unavailable', unavailableMessage, suggestionText, suggestionRange);
+
+                    var combinedMessage = suggestionText ? unavailableMessage + ' ' + suggestionText : unavailableMessage;
+                    writeMessage(state, 'error', combinedMessage.trim());
+                    setButtonDisabled(state.continueButton, true);
+                    return;
+                }
+
+                setAvailabilityState(state, 'error', (error && error.message) || fallback, '', null);
                 writeMessage(state, 'error', (error && error.message) || fallback);
                 setButtonDisabled(state.continueButton, true);
             })
@@ -844,7 +1085,9 @@
         var continueButton = continueButtons.length ? continueButtons[0] : null;
         var message = widget.querySelector(SELECTORS.message);
         var availability = widget.querySelector(SELECTORS.availability);
-        var calendar = widget.querySelector(SELECTORS.calendar);
+        var availabilityStatus = availability ? availability.querySelector('[data-availability="status"]') : null;
+        var availabilitySuggestion = availability ? availability.querySelector('[data-availability="suggestion"]') : null;
+        var availabilityApply = availability ? availability.querySelector('[data-availability="apply"]') : null;
 
         if (continueButtons.length > 1) {
             for (var i = 1; i < continueButtons.length; i += 1) {
@@ -886,7 +1129,9 @@
             continueButton: continueButton,
             message: message,
             availability: availability,
-            calendar: calendar,
+            availabilityStatus: availabilityStatus,
+            availabilitySuggestion: availabilitySuggestion,
+            availabilityApply: availabilityApply,
             baseRate: baseRate,
             formatCurrency: createFormatter(currency),
             summaryTargets: collectSummaryTargets(widget),
@@ -897,8 +1142,34 @@
             latestQuote: null,
             lastBreakdown: null,
             quoteTimer: null,
-            quoteAbort: null
+            quoteAbort: null,
+            availabilityStatusType: '',
+            blockedRanges: [],
+            availabilityData: null,
+            suggestedRange: null
         };
+
+        if (availabilityApply) {
+            availabilityApply.addEventListener('click', function () {
+                if (!state.suggestedRange) {
+                    return;
+                }
+
+                if (state.form && state.form.arrival) {
+                    state.form.arrival.value = state.suggestedRange.start;
+                }
+
+                if (state.form && state.form.departure) {
+                    state.form.departure.value = state.suggestedRange.end;
+                }
+
+                var inputEvent = new window.Event('input', { bubbles: true });
+                var changeEvent = new window.Event('change', { bubbles: true });
+
+                state.form.dispatchEvent(inputEvent);
+                state.form.dispatchEvent(changeEvent);
+            });
+        }
 
         form.addEventListener('submit', function (event) {
             event.preventDefault();
@@ -922,6 +1193,13 @@
                     state,
                     'info',
                     getText(state.listingData, 'quotePrompt', 'Select arrival and departure dates to see pricing.')
+                );
+                setAvailabilityState(
+                    state,
+                    'idle',
+                    getText(state.listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+                    '',
+                    null
                 );
                 return;
             }
@@ -960,6 +1238,13 @@
             resetPricing(state);
             setButtonDisabled(state.continueButton, true);
             writeMessage(state, 'info', getText(state.listingData, 'quoteLoading', 'Calculating pricing…'));
+            setAvailabilityState(
+                state,
+                'checking',
+                getText(state.listingData, 'availabilityChecking', 'Checking availability…'),
+                '',
+                null
+            );
             scheduleQuote(state);
         };
 
@@ -985,6 +1270,13 @@
 
         updateSummary(state, readForm(form));
         resetPricing(state);
+        setAvailabilityState(
+            state,
+            'idle',
+            getText(state.listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+            '',
+            null
+        );
         fetchAvailability(state);
         requestQuote(state);
     }
