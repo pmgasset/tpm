@@ -3,7 +3,10 @@ namespace VRSP;
 
 use function __;
 use function did_action;
+use function esc_url_raw;
 use function get_option;
+use function sanitize_email;
+use function sanitize_text_field;
 use function wp_list_pluck;
 
 /**
@@ -70,7 +73,9 @@ public function get_defaults(): array {
 'sms_housekeeper_number'  => '',
 'sms_owner_number'        => '',
 'sms_dnt_cookie_days'     => 30,
-'checkin_endpoint'        => 'https://240jordanview.com/wp-json/gms/v1/webhook',
+            'checkin_endpoint'        => 'https://240jordanview.com/wp-json/gms/v1/webhook',
+            'shortener_endpoint'      => '',
+            'shortener_api_key'       => '',
 'pricing_tiers'           => [
 [ 'min' => 0, 'max' => 2, 'uplift' => 0 ],
 [ 'min' => 3, 'max' => 5, 'uplift' => 0.05 ],
@@ -220,6 +225,12 @@ break;
                 break;
             case 'checkin_email':
                 $output[ $key ] = sanitize_email( $value );
+                break;
+            case 'shortener_endpoint':
+                $output[ $key ] = esc_url_raw( $value );
+                break;
+            case 'shortener_api_key':
+                $output[ $key ] = sanitize_text_field( $value );
                 break;
             default:
                 $output[ $key ] = is_string( $value ) ? sanitize_text_field( $value ) : $value;

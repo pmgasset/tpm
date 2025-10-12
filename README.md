@@ -35,6 +35,7 @@ Navigate to **VR Rental → Settings** and configure:
 - Stripe keys (test and/or live), webhook secret, and Stripe Tax toggle.
 - iCal import feeds and export token (share the export URL with channels).
 - SMS credentials, housekeeper, and owner phone numbers.
+- URL shortener worker endpoint and API token (optional).
 - Dynamic pricing tiers and coupons.
 - Business rules (check-in/out, deposit %, cancellation window).
 
