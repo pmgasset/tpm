@@ -185,10 +185,33 @@
 
         var listingData = state ? state.listingData : null;
         var template = getText(listingData, 'availabilitySuggestion', 'Next available stay: %1$s to %2$s.');
-        var startLabel = formatDate(suggestion.start);
-        var endLabel = formatDate(suggestion.end);
+        var startValue = toCalendarValue(suggestion.start);
+        var endValue = toCalendarValue(suggestion.end);
+
+        if (!startValue || !endValue) {
+            return '';
+        }
+
+        var startLabel = formatDate(startValue);
+        var endLabel = formatDate(endValue);
 
         return template.replace('%1$s', startLabel).replace('%2$s', endLabel);
+    }
+
+    function toCalendarValue(value) {
+        if (!value) {
+            return '';
+        }
+
+        if (value instanceof Date) {
+            return toISODate(value);
+        }
+
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+
+        return '';
     }
 
     function setAvailabilityState(state, type, message, suggestionText, suggestionRange) {
@@ -224,10 +247,13 @@
             }
         }
 
-        state.suggestedRange = suggestionRange && suggestionRange.start && suggestionRange.end
+        var suggestionStart = suggestionRange ? toCalendarValue(suggestionRange.start) : '';
+        var suggestionEnd = suggestionRange ? toCalendarValue(suggestionRange.end) : '';
+
+        state.suggestedRange = suggestionStart && suggestionEnd
             ? {
-                  start: suggestionRange.start,
-                  end: suggestionRange.end
+                  start: suggestionStart,
+                  end: suggestionEnd
               }
             : null;
 
@@ -782,8 +808,8 @@
             return;
         }
 
-        var arrivalValue = arrivalISO || '';
-        var departureValue = departureISO || '';
+        var arrivalValue = toCalendarValue(arrivalISO);
+        var departureValue = toCalendarValue(departureISO);
 
         if (state.form.arrival) {
             state.form.arrival.value = arrivalValue;
