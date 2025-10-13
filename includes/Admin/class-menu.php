@@ -82,13 +82,21 @@ $this->settings->prime_cache( $sanitized );
 return $sanitized;
 }
 
-public function enqueue_assets( string $hook ): void {
-if ( false === strpos( $hook, 'vrsp' ) ) {
-return;
-}
+    public function enqueue_assets( string $hook ): void {
+        $screen            = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        $is_booking_editor = $screen && 'vrsp_booking' === $screen->post_type && in_array( $hook, [ 'post.php', 'post-new.php' ], true );
 
-wp_enqueue_style( 'vrsp-admin', VRSP_PLUGIN_URL . 'admin/css/admin.css', [], VRSP_VERSION );
-}
+        if ( false === strpos( $hook, 'vrsp' ) && ! $is_booking_editor ) {
+            return;
+        }
+
+        wp_enqueue_style( 'vrsp-admin', VRSP_PLUGIN_URL . 'admin/css/admin.css', [], VRSP_VERSION );
+
+        if ( $is_booking_editor ) {
+            wp_enqueue_style( 'vrsp-reservation-editor', VRSP_PLUGIN_URL . 'admin/css/reservation-editor.css', [], VRSP_VERSION );
+            wp_enqueue_script( 'vrsp-reservation-editor', VRSP_PLUGIN_URL . 'admin/js/reservation-editor.js', [], VRSP_VERSION, true );
+        }
+    }
 
 public function render_dashboard(): void {
 $this->render_view( 'dashboard' );
