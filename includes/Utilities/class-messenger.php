@@ -2,6 +2,7 @@
 namespace VRSP\Utilities;
 
 use VRSP\Integrations\SmsGateway;
+use VRSP\Integrations\UrlShortener;
 use VRSP\Settings;
 
 use function __;
@@ -26,11 +27,13 @@ class Messenger {
     private $settings;
     private $sms;
     private $logger;
+    private $shortener;
 
-    public function __construct( Settings $settings, SmsGateway $sms, Logger $logger ) {
+    public function __construct( Settings $settings, SmsGateway $sms, Logger $logger, UrlShortener $shortener ) {
         $this->settings = $settings;
         $this->sms      = $sms;
         $this->logger   = $logger;
+        $this->shortener = $shortener;
 
         add_action( 'vrsp_booking_payment_received', [ $this, 'handle_payment' ], 10, 2 );
         add_action( 'vrsp_booking_confirmed', [ $this, 'handle_confirmed' ] );
@@ -191,6 +194,9 @@ class Messenger {
         $checkin_time  = (string) get_post_meta( $booking_id, '_vrsp_checkin_time', true );
         $checkout_time = (string) get_post_meta( $booking_id, '_vrsp_checkout_time', true );
 
+        $site_url       = home_url();
+        $short_site_url = $this->shorten_url( $site_url );
+
         return [
             'booking_id'         => $booking_id,
             'arrival'            => $arrival,
@@ -206,7 +212,9 @@ class Messenger {
             'last_name'          => $last_name,
             'guest_name'         => $guest_name,
             'property_name'      => get_bloginfo( 'name' ),
-            'site_url'           => home_url(),
+            'site_url'           => $short_site_url,
+            'site_url_short'     => $short_site_url,
+            'site_url_full'      => $site_url,
             'currency'           => $currency,
             'deposit_amount'     => $this->format_currency( $deposit_amount, $currency ),
             'deposit_amount_raw' => $deposit_amount,
@@ -224,5 +232,15 @@ class Messenger {
         $formatted = number_format_i18n( $amount, 2 );
 
         return sprintf( '%s %s', $currency, $formatted );
+    }
+
+    private function shorten_url( string $url ): string {
+        if ( '' === $url ) {
+            return '';
+        }
+
+        $short = $this->shortener->shorten( $url );
+
+        return $short ?: $url;
     }
 }

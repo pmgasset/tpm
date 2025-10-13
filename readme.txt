@@ -19,6 +19,7 @@ VR Single Property transforms WordPress into a full-featured vacation rental sta
 * iCal import/export every 15 minutes with activity logging.
 * voip.ms SMS automation (checkout reminders, issue routing, check-in app notifications).
 * REST webhook pushes to external check-in software.
+* Cloudflare Worker-powered URL shortener for guest communications.
 * Business rules editor, coupons, taxes, and fees in the admin.
 
 == Installation ==
