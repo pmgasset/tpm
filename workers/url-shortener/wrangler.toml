@@ -1,0 +1,13 @@
+name = "vrsp-url-shortener"
+main = "src/index.ts"
+compatibility_date = "2024-05-12"
+
+[[kv_namespaces]]
+binding = "LINKS"
+id = "00000000000000000000000000000000"
+preview_id = "00000000000000000000000000000000"
+
+[vars]
+API_TOKEN = "change-me"
+# Optional custom domain used in responses; defaults to the worker request origin when not provided.
+SHORT_DOMAIN = ""
