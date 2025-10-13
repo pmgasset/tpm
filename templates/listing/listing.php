@@ -46,6 +46,7 @@ $excerpt = get_the_excerpt( $rental );
                 <button type="button" class="vrsp-availability__apply" data-availability="apply" hidden>
                     <?php esc_html_e( 'Use these dates', 'vr-single-property' ); ?>
                 </button>
+                <div class="vrsp-availability__calendar" data-vrsp="calendar" aria-live="polite"></div>
             </div>
         </section>
 

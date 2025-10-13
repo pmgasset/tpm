@@ -394,6 +394,340 @@
         return ranges;
     }
 
+    function buildBlockedDateMap(blockedRanges) {
+        var map = Object.create(null);
+
+        if (!Array.isArray(blockedRanges) || !blockedRanges.length) {
+            return map;
+        }
+
+        for (var i = 0; i < blockedRanges.length; i += 1) {
+            var range = blockedRanges[i];
+            if (!range || !(range.start instanceof Date) || !(range.end instanceof Date)) {
+                continue;
+            }
+
+            var cursor = new Date(range.start.getTime());
+
+            while (cursor < range.end) {
+                var key = toISODate(cursor);
+                if (key) {
+                    map[key] = true;
+                }
+
+                cursor = addDays(cursor, 1);
+                if (!(cursor instanceof Date)) {
+                    break;
+                }
+            }
+        }
+
+        return map;
+    }
+
+    function getCalendarWindow(data) {
+        var windowInfo = data && data.window ? data.window : null;
+        var start = windowInfo && parseISODate(windowInfo.start);
+        var today = new Date();
+
+        if (!(start instanceof Date)) {
+            start = new Date(today.getFullYear(), today.getMonth(), 1);
+        } else {
+            start = new Date(start.getFullYear(), start.getMonth(), 1);
+        }
+
+        var months = 3;
+
+        if (windowInfo && typeof windowInfo.months !== 'undefined') {
+            var parsedMonths = Number(windowInfo.months);
+            if (!isNaN(parsedMonths) && parsedMonths > 0) {
+                months = parsedMonths;
+            }
+        } else if (windowInfo && windowInfo.end) {
+            var end = parseISODate(windowInfo.end);
+            if (end instanceof Date) {
+                end = new Date(end.getFullYear(), end.getMonth(), 1);
+                var diffMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+                if (diffMonths > 0) {
+                    months = diffMonths;
+                }
+            }
+        }
+
+        if (months > 12) {
+            months = 12;
+        } else if (months < 1) {
+            months = 1;
+        }
+
+        return {
+            start: start,
+            months: months
+        };
+    }
+
+    function getWeekdayNames() {
+        var names = [];
+        var reference = new Date(2020, 5, 7); // Sunday reference.
+
+        for (var i = 0; i < 7; i += 1) {
+            var date = new Date(reference.getTime());
+            date.setDate(reference.getDate() + i);
+
+            try {
+                names.push(date.toLocaleDateString(undefined, { weekday: 'short' }));
+            } catch (error) {
+                var fallback = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                return fallback;
+            }
+        }
+
+        return names;
+    }
+
+    function formatMonthLabel(date) {
+        if (!(date instanceof Date)) {
+            return '';
+        }
+
+        try {
+            return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        } catch (error) {
+            return date.getFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, '0');
+        }
+    }
+
+    function createLegendItem(className, label) {
+        var item = document.createElement('span');
+        item.className = 'vrsp-calendar__legend-item';
+
+        var swatch = document.createElement('span');
+        swatch.className = 'vrsp-calendar__legend-swatch ' + className;
+        swatch.setAttribute('aria-hidden', 'true');
+
+        var text = document.createElement('span');
+        text.className = 'vrsp-calendar__legend-label';
+        text.textContent = label;
+
+        item.appendChild(swatch);
+        item.appendChild(text);
+
+        return item;
+    }
+
+    function createCalendarMonth(state, year, month, blockedMap, today, labels) {
+        var container = document.createElement('section');
+        container.className = 'vrsp-calendar__month';
+
+        var heading = document.createElement('h3');
+        heading.className = 'vrsp-calendar__month-name';
+        heading.textContent = formatMonthLabel(new Date(year, month, 1));
+        container.appendChild(heading);
+
+        var table = document.createElement('table');
+        table.className = 'vrsp-calendar';
+        table.setAttribute('role', 'grid');
+
+        var thead = document.createElement('thead');
+        var headRow = document.createElement('tr');
+        var weekdays = getWeekdayNames();
+
+        for (var i = 0; i < weekdays.length; i += 1) {
+            var th = document.createElement('th');
+            th.scope = 'col';
+            th.textContent = weekdays[i];
+            headRow.appendChild(th);
+        }
+
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        var firstDay = new Date(year, month, 1).getDay();
+        var daysInMonth = new Date(year, month + 1, 0).getDate();
+        var day = 1;
+
+        for (var week = 0; week < 6; week += 1) {
+            var row = document.createElement('tr');
+
+            for (var dow = 0; dow < 7; dow += 1) {
+                var cell = document.createElement('td');
+                cell.className = 'vrsp-calendar__day';
+
+                if ((week === 0 && dow < firstDay) || day > daysInMonth) {
+                    cell.classList.add('is-empty');
+                    cell.setAttribute('aria-hidden', 'true');
+                    row.appendChild(cell);
+                    continue;
+                }
+
+                var currentDate = new Date(year, month, day);
+                var iso = toISODate(currentDate);
+                var label = formatDate(iso);
+                var isBlocked = !!blockedMap[iso];
+                var midnightToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                var isPast = currentDate < midnightToday;
+
+                var number = document.createElement('span');
+                number.className = 'vrsp-calendar__day-number';
+                number.textContent = day.toString();
+                cell.appendChild(number);
+
+                if (isBlocked) {
+                    var mark = document.createElement('span');
+                    mark.className = 'vrsp-calendar__day-status';
+                    mark.textContent = '×';
+                    mark.setAttribute('aria-hidden', 'true');
+                    cell.appendChild(mark);
+                    cell.classList.add('is-blocked');
+                    cell.setAttribute('aria-disabled', 'true');
+                    cell.setAttribute('title', labels.unavailable + ' ' + label);
+                    cell.setAttribute('aria-label', labels.unavailable + ' ' + label);
+                } else {
+                    cell.classList.add(isPast ? 'is-past' : 'is-available');
+                    cell.setAttribute('title', labels.available + ' ' + label);
+                    cell.setAttribute('aria-label', labels.available + ' ' + label);
+                }
+
+                cell.dataset.date = iso;
+                state.calendarCells[iso] = cell;
+
+                row.appendChild(cell);
+                day += 1;
+            }
+
+            tbody.appendChild(row);
+
+            if (day > daysInMonth) {
+                break;
+            }
+        }
+
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        return container;
+    }
+
+    function renderCalendar(state) {
+        if (!state || !state.calendar) {
+            return;
+        }
+
+        clearChildren(state.calendar);
+
+        state.calendarCells = Object.create(null);
+
+        var data = state.availabilityData || {};
+        var blockedMap = buildBlockedDateMap(state.blockedRanges || []);
+
+        var calendarWindow = getCalendarWindow(data);
+        var start = calendarWindow.start instanceof Date ? calendarWindow.start : new Date();
+        var months = calendarWindow.months || 3;
+        var today = new Date();
+
+        var legend = document.createElement('div');
+        legend.className = 'vrsp-calendar__legend';
+
+        legend.appendChild(
+            createLegendItem(
+                'is-available',
+                getText(state.listingData, 'availabilityLegendAvailable', 'Available')
+            )
+        );
+        legend.appendChild(
+            createLegendItem(
+                'is-blocked',
+                getText(state.listingData, 'availabilityLegendUnavailable', 'Unavailable')
+            )
+        );
+
+        state.calendar.appendChild(legend);
+
+        var monthsWrapper = document.createElement('div');
+        monthsWrapper.className = 'vrsp-calendar__months';
+
+        var labels = {
+            available: getText(state.listingData, 'availabilityDayAvailable', 'Available on'),
+            unavailable: getText(state.listingData, 'availabilityDayUnavailable', 'Not available on')
+        };
+
+        for (var i = 0; i < months; i += 1) {
+            var monthDate = new Date(start.getFullYear(), start.getMonth() + i, 1);
+            monthsWrapper.appendChild(
+                createCalendarMonth(state, monthDate.getFullYear(), monthDate.getMonth(), blockedMap, today, labels)
+            );
+        }
+
+        state.calendar.appendChild(monthsWrapper);
+
+        if (state.form) {
+            updateCalendarSelection(state, readForm(state.form));
+        }
+    }
+
+    function updateCalendarSelection(state, payload) {
+        if (!state || !state.calendarCells) {
+            return;
+        }
+
+        var keys = Object.keys(state.calendarCells);
+        for (var i = 0; i < keys.length; i += 1) {
+            var key = keys[i];
+            var cell = state.calendarCells[key];
+            if (!cell) {
+                continue;
+            }
+            cell.classList.remove('is-selected', 'is-selected-start', 'is-selected-end');
+        }
+
+        if (!payload) {
+            return;
+        }
+
+        var arrival = parseISODate(payload.arrival);
+        var departure = parseISODate(payload.departure);
+
+        if (!(arrival instanceof Date)) {
+            return;
+        }
+
+        var arrivalKey = toISODate(arrival);
+        var arrivalCell = state.calendarCells[arrivalKey];
+
+        if (arrivalCell) {
+            arrivalCell.classList.add('is-selected', 'is-selected-start');
+        }
+
+        if (!(departure instanceof Date) || departure.getTime() < arrival.getTime()) {
+            return;
+        }
+
+        var cursor = new Date(arrival.getTime());
+
+        while (cursor.getTime() <= departure.getTime()) {
+            var key = toISODate(cursor);
+            var cell = state.calendarCells[key];
+
+            if (cell) {
+                cell.classList.add('is-selected');
+
+                if (key === arrivalKey) {
+                    cell.classList.add('is-selected-start');
+                }
+
+                if (cursor.getTime() === departure.getTime()) {
+                    cell.classList.add('is-selected-end');
+                }
+            }
+
+            cursor = addDays(cursor, 1);
+            if (!(cursor instanceof Date)) {
+                break;
+            }
+        }
+    }
+
     function findNextAvailableRange(blockedRanges, arrival, departure) {
         if (!(arrival instanceof Date) || !(departure instanceof Date)) {
             return null;
@@ -470,6 +804,9 @@
     function updateSummary(state, payload) {
         var summary = state.summaryTargets;
         if (!summary) {
+            if (state) {
+                updateCalendarSelection(state, payload);
+            }
             return;
         }
 
@@ -485,6 +822,8 @@
             var nights = computeNights(payload);
             summary.nights.textContent = nights !== null ? nights : '—';
         }
+
+        updateCalendarSelection(state, payload);
     }
 
     function resetPricing(state) {
@@ -759,6 +1098,7 @@
         var data = payload || {};
         state.availabilityData = data;
         state.blockedRanges = buildBlockedRanges(data.blocked || []);
+        renderCalendar(state);
 
         if (!state.availabilityStatusType) {
             setAvailabilityState(
@@ -1088,6 +1428,7 @@
         var availabilityStatus = availability ? availability.querySelector('[data-availability="status"]') : null;
         var availabilitySuggestion = availability ? availability.querySelector('[data-availability="suggestion"]') : null;
         var availabilityApply = availability ? availability.querySelector('[data-availability="apply"]') : null;
+        var calendar = widget.querySelector(SELECTORS.calendar);
 
         if (continueButtons.length > 1) {
             for (var i = 1; i < continueButtons.length; i += 1) {
@@ -1132,6 +1473,7 @@
             availabilityStatus: availabilityStatus,
             availabilitySuggestion: availabilitySuggestion,
             availabilityApply: availabilityApply,
+            calendar: calendar,
             baseRate: baseRate,
             formatCurrency: createFormatter(currency),
             summaryTargets: collectSummaryTargets(widget),
@@ -1146,7 +1488,8 @@
             availabilityStatusType: '',
             blockedRanges: [],
             availabilityData: null,
-            suggestedRange: null
+            suggestedRange: null,
+            calendarCells: Object.create(null)
         };
 
         if (availabilityApply) {
@@ -1277,6 +1620,7 @@
             '',
             null
         );
+        renderCalendar(state);
         fetchAvailability(state);
         requestQuote(state);
     }
@@ -1310,6 +1654,7 @@
         state.baseRate = baseRate;
         state.formatCurrency = createFormatter(currency);
 
+        renderCalendar(state);
         fetchAvailability(state);
         requestQuote(state);
     }
