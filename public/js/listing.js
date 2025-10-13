@@ -17,7 +17,58 @@
     var SUMMARY_FIELDS = ['arrival', 'departure', 'nights'];
     var PRICING_FIELDS = ['stay', 'cleaning', 'discount', 'taxes', 'total', 'deposit', 'balance'];
 
-    var stateByWidget = new WeakMap();
+    var assign = typeof Object.assign === 'function'
+        ? Object.assign
+        : function (target) {
+              if (!target) {
+                  target = {};
+              }
+
+              for (var i = 1; i < arguments.length; i += 1) {
+                  var source = arguments[i];
+                  if (!source) {
+                      continue;
+                  }
+
+                  for (var key in source) {
+                      if (Object.prototype.hasOwnProperty.call(source, key)) {
+                          target[key] = source[key];
+                      }
+                  }
+              }
+
+              return target;
+          };
+
+    var stateByWidget = (function () {
+        if (typeof window.WeakMap === 'function') {
+            return new window.WeakMap();
+        }
+
+        var entries = [];
+
+        return {
+            set: function (key, value) {
+                for (var i = 0; i < entries.length; i += 1) {
+                    if (entries[i][0] === key) {
+                        entries[i][1] = value;
+                        return;
+                    }
+                }
+
+                entries.push([key, value]);
+            },
+            get: function (key) {
+                for (var i = 0; i < entries.length; i += 1) {
+                    if (entries[i][0] === key) {
+                        return entries[i][1];
+                    }
+                }
+
+                return undefined;
+            }
+        };
+    })();
     var initAttempts = 0;
     var supportsAbortController = typeof window.AbortController === 'function';
 
@@ -399,8 +450,8 @@
             return '';
         }
 
-        var month = (date.getMonth() + 1).toString().padStart(2, '0');
-        var day = date.getDate().toString().padStart(2, '0');
+        var month = padTwo(date.getMonth() + 1);
+        var day = padTwo(date.getDate());
 
         return date.getFullYear() + '-' + month + '-' + day;
     }
@@ -533,6 +584,16 @@
         return names;
     }
 
+    function padTwo(value) {
+        var string = String(value);
+
+        while (string.length < 2) {
+            string = '0' + string;
+        }
+
+        return string;
+    }
+
     function formatMonthLabel(date) {
         if (!(date instanceof Date)) {
             return '';
@@ -541,7 +602,7 @@
         try {
             return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
         } catch (error) {
-            return date.getFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, '0');
+            return date.getFullYear() + '-' + padTwo(date.getMonth() + 1);
         }
     }
 
@@ -1450,7 +1511,7 @@
                     });
             })
             .then(function (quote) {
-                state.latestPayload = Object.assign({}, payload);
+                state.latestPayload = assign({}, payload);
                 state.latestQuote = quote;
 
                 writePricing(state, payload, quote);
@@ -1494,7 +1555,7 @@
                     return;
                 }
 
-                state.latestPayload = Object.assign({}, payload);
+                state.latestPayload = assign({}, payload);
                 state.latestQuote = null;
                 resetPricing(state);
 
@@ -1779,7 +1840,7 @@
             }
 
             if (state.latestQuote && state.latestPayload && sameCoreQuoteFields(payload, state.latestPayload)) {
-                state.latestPayload = Object.assign({}, state.latestPayload, payload);
+                state.latestPayload = assign({}, state.latestPayload, payload);
                 writePricing(state, payload, state.latestQuote);
 
                 if (hasCheckoutFields(payload)) {
