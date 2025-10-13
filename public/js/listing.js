@@ -58,6 +58,28 @@
         }
     }
 
+    function dispatchBubbledEvent(target, type) {
+        if (!target || !type) {
+            return;
+        }
+
+        var event;
+
+        if (typeof window.Event === 'function') {
+            try {
+                event = new window.Event(type, { bubbles: true });
+            } catch (error) {
+                event = document.createEvent('Event');
+                event.initEvent(type, true, false);
+            }
+        } else {
+            event = document.createEvent('Event');
+            event.initEvent(type, true, false);
+        }
+
+        target.dispatchEvent(event);
+    }
+
     function readForm(form) {
         if (!form) {
             return {
@@ -567,6 +589,7 @@
                 var isBlocked = !!blockedMap[iso];
                 var midnightToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                 var isPast = currentDate < midnightToday;
+                var isDisabled = isBlocked || isPast;
 
                 var number = document.createElement('span');
                 number.className = 'vrsp-calendar__day-number';
@@ -583,13 +606,22 @@
                     cell.setAttribute('aria-disabled', 'true');
                     cell.setAttribute('title', labels.unavailable + ' ' + label);
                     cell.setAttribute('aria-label', labels.unavailable + ' ' + label);
+                } else if (isPast) {
+                    cell.classList.add('is-past');
+                    cell.setAttribute('aria-disabled', 'true');
+                    cell.setAttribute('title', labels.unavailable + ' ' + label);
+                    cell.setAttribute('aria-label', labels.unavailable + ' ' + label);
                 } else {
-                    cell.classList.add(isPast ? 'is-past' : 'is-available');
+                    cell.classList.add('is-available');
+                    cell.setAttribute('role', 'button');
+                    cell.tabIndex = 0;
                     cell.setAttribute('title', labels.available + ' ' + label);
                     cell.setAttribute('aria-label', labels.available + ' ' + label);
                 }
 
                 cell.dataset.date = iso;
+                cell.setAttribute('data-calendar-day', iso);
+                cell.setAttribute('data-calendar-disabled', isDisabled ? '1' : '0');
                 state.calendarCells[iso] = cell;
 
                 row.appendChild(cell);
@@ -620,6 +652,7 @@
 
         var data = state.availabilityData || {};
         var blockedMap = buildBlockedDateMap(state.blockedRanges || []);
+        state.blockedDateMap = blockedMap;
 
         var calendarWindow = getCalendarWindow(data);
         var start = calendarWindow.start instanceof Date ? calendarWindow.start : new Date();
@@ -664,6 +697,177 @@
         if (state.form) {
             updateCalendarSelection(state, readForm(state.form));
         }
+    }
+
+    function getCalendarCell(state, node) {
+        if (!state || !node) {
+            return null;
+        }
+
+        var root = state.calendar;
+        if (!root) {
+            return null;
+        }
+
+        var current = node;
+
+        while (current && current !== root) {
+            if (current.classList && current.classList.contains('vrsp-calendar__day')) {
+                return current;
+            }
+            current = current.parentNode;
+        }
+
+        if (current && current.classList && current.classList.contains('vrsp-calendar__day')) {
+            return current;
+        }
+
+        return null;
+    }
+
+    function isCalendarCellDisabled(cell) {
+        if (!cell) {
+            return true;
+        }
+
+        if (cell.getAttribute('data-calendar-disabled') === '1') {
+            return true;
+        }
+
+        if (cell.classList && (cell.classList.contains('is-blocked') || cell.classList.contains('is-past'))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function isCalendarRangeSelectable(state, arrivalDate, departureDate) {
+        if (!state) {
+            return false;
+        }
+
+        if (!(arrivalDate instanceof Date) || !(departureDate instanceof Date)) {
+            return false;
+        }
+
+        if (departureDate.getTime() <= arrivalDate.getTime()) {
+            return false;
+        }
+
+        var map = state.blockedDateMap || {};
+        var cursor = new Date(arrivalDate.getTime());
+
+        while (cursor < departureDate) {
+            var key = toISODate(cursor);
+            if (map && key && map[key]) {
+                return false;
+            }
+
+            cursor = addDays(cursor, 1);
+            if (!(cursor instanceof Date)) {
+                return false;
+            }
+        }
+
+        var departureKey = toISODate(departureDate);
+        if (map && departureKey && map[departureKey]) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function commitCalendarSelection(state, arrivalISO, departureISO) {
+        if (!state || !state.form) {
+            return;
+        }
+
+        var arrivalValue = arrivalISO || '';
+        var departureValue = departureISO || '';
+
+        if (state.form.arrival) {
+            state.form.arrival.value = arrivalValue;
+        }
+
+        if (state.form.departure) {
+            state.form.departure.value = departureValue;
+        }
+
+        updateCalendarSelection(state, {
+            arrival: arrivalValue,
+            departure: departureValue
+        });
+
+        dispatchBubbledEvent(state.form, 'input');
+        dispatchBubbledEvent(state.form, 'change');
+    }
+
+    function selectCalendarDate(state, isoDate) {
+        if (!state || !isoDate) {
+            return;
+        }
+
+        var cell = state.calendarCells ? state.calendarCells[isoDate] : null;
+        if (!cell || isCalendarCellDisabled(cell)) {
+            return;
+        }
+
+        var selectedDate = parseISODate(isoDate);
+        if (!(selectedDate instanceof Date)) {
+            return;
+        }
+
+        var payload = readForm(state.form);
+        var arrival = parseISODate(payload.arrival);
+        var departure = parseISODate(payload.departure);
+
+        if (!arrival || (arrival && departure)) {
+            commitCalendarSelection(state, isoDate, '');
+            return;
+        }
+
+        if (selectedDate.getTime() <= arrival.getTime()) {
+            commitCalendarSelection(state, isoDate, '');
+            return;
+        }
+
+        if (!isCalendarRangeSelectable(state, arrival, selectedDate)) {
+            commitCalendarSelection(state, isoDate, '');
+            return;
+        }
+
+        commitCalendarSelection(state, toISODate(arrival), isoDate);
+    }
+
+    function handleCalendarInteraction(state, event) {
+        if (!state || !event) {
+            return;
+        }
+
+        if (event.type === 'click' && typeof event.button !== 'undefined' && event.button !== 0) {
+            return;
+        }
+
+        var cell = getCalendarCell(state, event.target);
+        if (!cell || isCalendarCellDisabled(cell)) {
+            return;
+        }
+
+        var iso = cell.getAttribute('data-calendar-day') || cell.dataset.date;
+        if (!iso) {
+            return;
+        }
+
+        if (event.type === 'keydown') {
+            var key = event.key || event.keyCode;
+            if (key === 'Enter' || key === ' ' || key === 13 || key === 32) {
+                event.preventDefault();
+                selectCalendarDate(state, iso);
+            }
+            return;
+        }
+
+        selectCalendarDate(state, iso);
     }
 
     function updateCalendarSelection(state, payload) {
@@ -1489,7 +1693,8 @@
             blockedRanges: [],
             availabilityData: null,
             suggestedRange: null,
-            calendarCells: Object.create(null)
+            calendarCells: Object.create(null),
+            blockedDateMap: Object.create(null)
         };
 
         if (availabilityApply) {
@@ -1498,19 +1703,19 @@
                     return;
                 }
 
-                if (state.form && state.form.arrival) {
-                    state.form.arrival.value = state.suggestedRange.start;
+                commitCalendarSelection(state, state.suggestedRange.start, state.suggestedRange.end);
+            });
+        }
+
+        if (calendar) {
+            calendar.addEventListener('click', function (event) {
+                handleCalendarInteraction(state, event);
+            });
+
+            calendar.addEventListener('keydown', function (event) {
+                if (event && (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13 || event.keyCode === 32)) {
+                    handleCalendarInteraction(state, event);
                 }
-
-                if (state.form && state.form.departure) {
-                    state.form.departure.value = state.suggestedRange.end;
-                }
-
-                var inputEvent = new window.Event('input', { bubbles: true });
-                var changeEvent = new window.Event('change', { bubbles: true });
-
-                state.form.dispatchEvent(inputEvent);
-                state.form.dispatchEvent(changeEvent);
             });
         }
 

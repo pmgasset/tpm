@@ -56,15 +56,9 @@ $excerpt = get_the_excerpt( $rental );
                 <p><?php esc_html_e( 'Enter your stay details to see live pricing. When it looks good, continue to secure payment.', 'vr-single-property' ); ?></p>
             </header>
             <form class="vrsp-form" data-vrsp="form">
+                <input type="hidden" name="arrival" />
+                <input type="hidden" name="departure" />
                 <div class="vrsp-form__grid">
-                    <label>
-                        <span><?php esc_html_e( 'Arrival', 'vr-single-property' ); ?></span>
-                        <input type="date" name="arrival" required />
-                    </label>
-                    <label>
-                        <span><?php esc_html_e( 'Departure', 'vr-single-property' ); ?></span>
-                        <input type="date" name="departure" required />
-                    </label>
                     <label>
                         <span><?php esc_html_e( 'Guests', 'vr-single-property' ); ?></span>
                         <input type="number" name="guests" min="1" value="2" />
