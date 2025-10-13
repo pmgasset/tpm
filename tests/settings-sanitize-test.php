@@ -127,6 +127,8 @@ namespace {
             'booking_approved' => "Updated approved message  ",
         ],
         'checkin_email' => 'updated@example.com',
+        'shortener_endpoint' => ' https://short.example.com/worker ',
+        'shortener_api_key' => "  api-token\n",
     ];
 
     $sanitized = $settings->sanitize($partial);
@@ -145,6 +147,14 @@ namespace {
 
     if ($sanitized['checkin_email'] !== 'updated@example.com') {
         throw new \RuntimeException('Submitted check-in email should be sanitized.');
+    }
+
+    if ($sanitized['shortener_endpoint'] !== 'https://short.example.com/worker') {
+        throw new \RuntimeException('Shortener endpoint should be trimmed and sanitized.');
+    }
+
+    if ($sanitized['shortener_api_key'] !== 'api-token') {
+        throw new \RuntimeException('Shortener API token should be sanitized.');
     }
 
     if (empty($sanitized['coupons']) || $sanitized['coupons'][0]['code'] !== 'SAVE10') {
