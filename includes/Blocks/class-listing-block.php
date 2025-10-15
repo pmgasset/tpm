@@ -142,6 +142,8 @@ class ListingBlock {
                     'availabilityLegendUnavailable' => __( 'Unavailable', 'vr-single-property' ),
                     'availabilityDayAvailable' => __( 'Available on', 'vr-single-property' ),
                     'availabilityDayUnavailable' => __( 'Not available on', 'vr-single-property' ),
+                    'availabilityPreviousMonth' => __( 'Previous month', 'vr-single-property' ),
+                    'availabilityNextMonth' => __( 'Next month', 'vr-single-property' ),
                     'quotePrompt'       => __( 'Select arrival and departure dates to see pricing.', 'vr-single-property' ),
                     'quoteLoading'      => __( 'Calculating pricing…', 'vr-single-property' ),
                     'depositNote'       => __( 'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.', 'vr-single-property' ),

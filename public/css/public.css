@@ -141,6 +141,60 @@
     background: rgba(239, 68, 68, 0.18);
 }
 
+.vrsp-calendar__controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 0.75rem;
+}
+
+.vrsp-calendar__nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    background: rgba(255, 255, 255, 0.9);
+    color: #1f2937;
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.vrsp-calendar__nav:hover:not(:disabled),
+.vrsp-calendar__nav:focus-visible:not(:disabled) {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.45);
+    color: #1d4ed8;
+}
+
+.vrsp-calendar__nav:focus-visible:not(:disabled) {
+    outline: 3px solid rgba(37, 99, 235, 0.4);
+    outline-offset: 2px;
+}
+
+.vrsp-calendar__nav:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.vrsp-calendar__range {
+    flex: 1 1 auto;
+    text-align: center;
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
+    white-space: normal;
+}
+
+.vrsp-calendar__nav span {
+    display: block;
+}
+
 .vrsp-calendar__months {
     display: grid;
     gap: 1rem;
