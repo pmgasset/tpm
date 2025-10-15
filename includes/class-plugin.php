@@ -7,6 +7,7 @@ use VRSP\Integrations\CheckinApp;
 use VRSP\Integrations\IcalSync;
 use VRSP\Integrations\SmsGateway;
 use VRSP\Integrations\StripeGateway;
+use VRSP\Integrations\UrlShortener;
 use VRSP\PostTypes\BookingPostType;
 use VRSP\PostTypes\BasePostType;
 use VRSP\PostTypes\LogPostType;
@@ -118,8 +119,9 @@ $rules       = new BusinessRules( $this->settings );
 $stripe      = new StripeGateway( $this->settings, $this->logger, $pricing );
 $ical        = new IcalSync( $this->settings, $this->logger );
         $sms         = new SmsGateway( $this->settings, $this->logger );
+        $shortener   = new UrlShortener( $this->settings, $this->logger );
         $checkin_app = new CheckinApp( $this->settings, $this->logger );
-        new Messenger( $this->settings, $sms, $this->logger );
+        new Messenger( $this->settings, $sms, $this->logger, $shortener );
 
         new AdminMenu( $this->settings, $this->logger, $pricing, $rules, $stripe, $ical, $sms );
 new RestRoutes( $this->settings, $pricing, $stripe, $ical, $sms, $checkin_app, $rules, $this->logger );
