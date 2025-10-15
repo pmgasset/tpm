@@ -131,6 +131,73 @@
         target.dispatchEvent(event);
     }
 
+    function getFormField(form, name) {
+        if (!form || !name) {
+            return null;
+        }
+
+        if (form.elements) {
+            if (typeof form.elements.namedItem === 'function') {
+                var named = form.elements.namedItem(name);
+                if (named) {
+                    return named;
+                }
+            }
+
+            if (typeof form.elements[name] !== 'undefined') {
+                return form.elements[name];
+            }
+        }
+
+        if (typeof form[name] !== 'undefined') {
+            return form[name];
+        }
+
+        return null;
+    }
+
+    function getFormFieldValue(form, name) {
+        var field = getFormField(form, name);
+        if (!field) {
+            return '';
+        }
+
+        if (typeof field.value !== 'undefined') {
+            return field.value || '';
+        }
+
+        if (field.length && typeof field.item === 'function') {
+            var first = field.item(0);
+            if (first && typeof first.value !== 'undefined') {
+                return first.value || '';
+            }
+        }
+
+        return '';
+    }
+
+    function setFormFieldValue(form, name, value) {
+        var field = getFormField(form, name);
+        if (!field) {
+            return false;
+        }
+
+        if (typeof field.value !== 'undefined') {
+            field.value = value;
+            return true;
+        }
+
+        if (field.length && typeof field.item === 'function') {
+            var first = field.item(0);
+            if (first && typeof first.value !== 'undefined') {
+                first.value = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     function readForm(form) {
         if (!form) {
             return {
@@ -147,23 +214,24 @@
         }
 
         var paymentOption = 'deposit';
-        if (form.payment_option) {
+        var paymentField = getFormField(form, 'payment_option');
+        if (paymentField && typeof paymentField.value !== 'undefined') {
             try {
-                paymentOption = form.payment_option.value || 'deposit';
+                paymentOption = paymentField.value || 'deposit';
             } catch (error) {
                 paymentOption = 'deposit';
             }
         }
 
         return {
-            arrival: form.arrival ? form.arrival.value : '',
-            departure: form.departure ? form.departure.value : '',
-            guests: form.guests ? form.guests.value : '',
-            coupon: form.coupon ? form.coupon.value : '',
-            first_name: form.first_name ? form.first_name.value : '',
-            last_name: form.last_name ? form.last_name.value : '',
-            email: form.email ? form.email.value : '',
-            phone: form.phone ? form.phone.value : '',
+            arrival: getFormFieldValue(form, 'arrival'),
+            departure: getFormFieldValue(form, 'departure'),
+            guests: getFormFieldValue(form, 'guests'),
+            coupon: getFormFieldValue(form, 'coupon'),
+            first_name: getFormFieldValue(form, 'first_name'),
+            last_name: getFormFieldValue(form, 'last_name'),
+            email: getFormFieldValue(form, 'email'),
+            phone: getFormFieldValue(form, 'phone'),
             payment_option: paymentOption
         };
     }
@@ -872,13 +940,8 @@
         var arrivalValue = toCalendarValue(arrivalISO);
         var departureValue = toCalendarValue(departureISO);
 
-        if (state.form.arrival) {
-            state.form.arrival.value = arrivalValue;
-        }
-
-        if (state.form.departure) {
-            state.form.departure.value = departureValue;
-        }
+        setFormFieldValue(state.form, 'arrival', arrivalValue);
+        setFormFieldValue(state.form, 'departure', departureValue);
 
         updateCalendarSelection(state, {
             arrival: arrivalValue,
