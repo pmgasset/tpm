@@ -130,6 +130,17 @@ $regulatory_value = ! empty( $rental_meta['vrsp_regulatory_ids'] ) ? implode( "\
 <input type="text" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[sms_owner_number]" placeholder="<?php esc_attr_e( 'Owner number', 'vr-single-property' ); ?>" value="<?php echo esc_attr( $values['sms_owner_number'] ); ?>" />
 </td>
 </tr>
+<tr>
+<th scope="row"><?php esc_html_e( 'URL Shortener', 'vr-single-property' ); ?></th>
+<td>
+<label><?php esc_html_e( 'Worker Base URL', 'vr-single-property' ); ?><br />
+<input type="url" class="widefat" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[shortener_endpoint]" value="<?php echo esc_attr( $values['shortener_endpoint'] ); ?>" placeholder="https://short.example.com" /></label>
+<p class="description"><?php esc_html_e( 'The worker base URL. The plugin will append /shorten automatically if needed.', 'vr-single-property' ); ?></p>
+<label><?php esc_html_e( 'API Token', 'vr-single-property' ); ?><br />
+<input type="text" class="regular-text" name="<?php echo esc_attr( \VRSP\Settings::OPTION_KEY ); ?>[shortener_api_key]" value="<?php echo esc_attr( $values['shortener_api_key'] ); ?>" /></label>
+<p class="description"><?php esc_html_e( 'Optional bearer token that must match the worker configuration.', 'vr-single-property' ); ?></p>
+</td>
+</tr>
 </table>
 
 <h2><?php esc_html_e( 'Dynamic Pricing Tiers', 'vr-single-property' ); ?></h2>
