@@ -118,8 +118,28 @@ class ListingBlock {
     }
 
     private function enqueue_assets(): void {
-        wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
-        wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], VRSP_VERSION, true );
+        $style_path  = VRSP_PLUGIN_DIR . 'public/css/public.css';
+        $script_path = VRSP_PLUGIN_DIR . 'public/js/listing.js';
+
+        $style_version  = VRSP_VERSION;
+        $script_version = VRSP_VERSION;
+
+        if ( file_exists( $style_path ) ) {
+            $style_mtime = filemtime( $style_path );
+            if ( false !== $style_mtime ) {
+                $style_version = (string) $style_mtime;
+            }
+        }
+
+        if ( file_exists( $script_path ) ) {
+            $script_mtime = filemtime( $script_path );
+            if ( false !== $script_mtime ) {
+                $script_version = (string) $script_mtime;
+            }
+        }
+
+        wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], $style_version );
+        wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], $script_version, true );
 
         wp_localize_script(
             'vrsp-listing',
@@ -131,6 +151,19 @@ class ListingBlock {
                 'rules'    => $this->rules->get_rules(),
                 'i18n'     => [
                     'availabilityEmpty' => __( 'Your preferred dates are open!', 'vr-single-property' ),
+                    'availabilityPrompt' => __( 'Start by selecting your check-in and checkout dates.', 'vr-single-property' ),
+                    'availabilityChecking' => __( 'Checking availability…', 'vr-single-property' ),
+                    'availabilityAvailable' => __( 'Great news! Your dates are available.', 'vr-single-property' ),
+                    'availabilityUnavailable' => __( 'Those dates are unavailable. Please choose another stay.', 'vr-single-property' ),
+                    'availabilitySuggestion' => __( 'Next available stay: %1$s to %2$s.', 'vr-single-property' ),
+                    'availabilityNoSuggestion' => __( "We'll follow up shortly with the next available dates.", 'vr-single-property' ),
+                    'availabilityApply' => __( 'Use these dates', 'vr-single-property' ),
+                    'availabilityLegendAvailable' => __( 'Available', 'vr-single-property' ),
+                    'availabilityLegendUnavailable' => __( 'Unavailable', 'vr-single-property' ),
+                    'availabilityDayAvailable' => __( 'Available on', 'vr-single-property' ),
+                    'availabilityDayUnavailable' => __( 'Not available on', 'vr-single-property' ),
+                    'availabilityPreviousMonth' => __( 'Previous month', 'vr-single-property' ),
+                    'availabilityNextMonth' => __( 'Next month', 'vr-single-property' ),
                     'quotePrompt'       => __( 'Select arrival and departure dates to see pricing.', 'vr-single-property' ),
                     'quoteLoading'      => __( 'Calculating pricing…', 'vr-single-property' ),
                     'depositNote'       => __( 'We will automatically charge the saved payment method 7 days prior to arrival for the remaining balance.', 'vr-single-property' ),
