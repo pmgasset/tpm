@@ -1,0 +1,31 @@
+body.post-type-vrsp_booking .vrsp-reservation-editor__grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: stretch;
+    width: 100%;
+}
+
+body.post-type-vrsp_booking .vrsp-reservation-editor__module {
+    height: 100%;
+    min-width: 0;
+}
+
+body.post-type-vrsp_booking .vrsp-reservation-editor__module .inside {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: 100%;
+}
+
+body.post-type-vrsp_booking .vrsp-reservation-editor__module .inside > :last-child {
+    margin-top: auto;
+}
+
+body.post-type-vrsp_booking .vrsp-reservation-editor__grid[data-vrsp-reservation-modules] {
+    margin-top: 2rem;
+}
+
+body.post-type-vrsp_booking .vrsp-reservation-editor__grid[data-vrsp-reservation-modules] > .vrsp-reservation-editor__module {
+    box-sizing: border-box;
+}
