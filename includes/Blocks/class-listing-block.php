@@ -118,8 +118,28 @@ class ListingBlock {
     }
 
     private function enqueue_assets(): void {
-        wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], VRSP_VERSION );
-        wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], VRSP_VERSION, true );
+        $style_path  = VRSP_PLUGIN_DIR . 'public/css/public.css';
+        $script_path = VRSP_PLUGIN_DIR . 'public/js/listing.js';
+
+        $style_version  = VRSP_VERSION;
+        $script_version = VRSP_VERSION;
+
+        if ( file_exists( $style_path ) ) {
+            $style_mtime = filemtime( $style_path );
+            if ( false !== $style_mtime ) {
+                $style_version = (string) $style_mtime;
+            }
+        }
+
+        if ( file_exists( $script_path ) ) {
+            $script_mtime = filemtime( $script_path );
+            if ( false !== $script_mtime ) {
+                $script_version = (string) $script_mtime;
+            }
+        }
+
+        wp_enqueue_style( 'vrsp-public', VRSP_PLUGIN_URL . 'public/css/public.css', [], $style_version );
+        wp_enqueue_script( 'vrsp-listing', VRSP_PLUGIN_URL . 'public/js/listing.js', [], $script_version, true );
 
         wp_localize_script(
             'vrsp-listing',
