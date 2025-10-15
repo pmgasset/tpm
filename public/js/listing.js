@@ -4,6 +4,9 @@
     var INIT_RETRY_LIMIT = 20;
     var INIT_RETRY_DELAY = 150;
     var QUOTE_DEBOUNCE = 350;
+    var DEFAULT_AVAILABILITY_MONTHS = 12;
+    var CALENDAR_VIEW_MONTHS = 2;
+    var CALENDAR_VIEW_STEP = 1;
 
     var SELECTORS = {
         form: '[data-vrsp="form"], .vrsp-form',
@@ -17,7 +20,58 @@
     var SUMMARY_FIELDS = ['arrival', 'departure', 'nights'];
     var PRICING_FIELDS = ['stay', 'cleaning', 'discount', 'taxes', 'total', 'deposit', 'balance'];
 
-    var stateByWidget = new WeakMap();
+    var assign = typeof Object.assign === 'function'
+        ? Object.assign
+        : function (target) {
+              if (!target) {
+                  target = {};
+              }
+
+              for (var i = 1; i < arguments.length; i += 1) {
+                  var source = arguments[i];
+                  if (!source) {
+                      continue;
+                  }
+
+                  for (var key in source) {
+                      if (Object.prototype.hasOwnProperty.call(source, key)) {
+                          target[key] = source[key];
+                      }
+                  }
+              }
+
+              return target;
+          };
+
+    var stateByWidget = (function () {
+        if (typeof window.WeakMap === 'function') {
+            return new window.WeakMap();
+        }
+
+        var entries = [];
+
+        return {
+            set: function (key, value) {
+                for (var i = 0; i < entries.length; i += 1) {
+                    if (entries[i][0] === key) {
+                        entries[i][1] = value;
+                        return;
+                    }
+                }
+
+                entries.push([key, value]);
+            },
+            get: function (key) {
+                for (var i = 0; i < entries.length; i += 1) {
+                    if (entries[i][0] === key) {
+                        return entries[i][1];
+                    }
+                }
+
+                return undefined;
+            }
+        };
+    })();
     var initAttempts = 0;
     var supportsAbortController = typeof window.AbortController === 'function';
 
@@ -58,6 +112,95 @@
         }
     }
 
+    function dispatchBubbledEvent(target, type) {
+        if (!target || !type) {
+            return;
+        }
+
+        var event;
+
+        if (typeof window.Event === 'function') {
+            try {
+                event = new window.Event(type, { bubbles: true });
+            } catch (error) {
+                event = document.createEvent('Event');
+                event.initEvent(type, true, false);
+            }
+        } else {
+            event = document.createEvent('Event');
+            event.initEvent(type, true, false);
+        }
+
+        target.dispatchEvent(event);
+    }
+
+    function getFormField(form, name) {
+        if (!form || !name) {
+            return null;
+        }
+
+        if (form.elements) {
+            if (typeof form.elements.namedItem === 'function') {
+                var named = form.elements.namedItem(name);
+                if (named) {
+                    return named;
+                }
+            }
+
+            if (typeof form.elements[name] !== 'undefined') {
+                return form.elements[name];
+            }
+        }
+
+        if (typeof form[name] !== 'undefined') {
+            return form[name];
+        }
+
+        return null;
+    }
+
+    function getFormFieldValue(form, name) {
+        var field = getFormField(form, name);
+        if (!field) {
+            return '';
+        }
+
+        if (typeof field.value !== 'undefined') {
+            return field.value || '';
+        }
+
+        if (field.length && typeof field.item === 'function') {
+            var first = field.item(0);
+            if (first && typeof first.value !== 'undefined') {
+                return first.value || '';
+            }
+        }
+
+        return '';
+    }
+
+    function setFormFieldValue(form, name, value) {
+        var field = getFormField(form, name);
+        if (!field) {
+            return false;
+        }
+
+        if (typeof field.value !== 'undefined') {
+            field.value = value;
+            return true;
+        }
+
+        if (field.length && typeof field.item === 'function') {
+            var first = field.item(0);
+            if (first && typeof first.value !== 'undefined') {
+                first.value = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     function readForm(form) {
         if (!form) {
             return {
@@ -74,23 +217,24 @@
         }
 
         var paymentOption = 'deposit';
-        if (form.payment_option) {
+        var paymentField = getFormField(form, 'payment_option');
+        if (paymentField && typeof paymentField.value !== 'undefined') {
             try {
-                paymentOption = form.payment_option.value || 'deposit';
+                paymentOption = paymentField.value || 'deposit';
             } catch (error) {
                 paymentOption = 'deposit';
             }
         }
 
         return {
-            arrival: form.arrival ? form.arrival.value : '',
-            departure: form.departure ? form.departure.value : '',
-            guests: form.guests ? form.guests.value : '',
-            coupon: form.coupon ? form.coupon.value : '',
-            first_name: form.first_name ? form.first_name.value : '',
-            last_name: form.last_name ? form.last_name.value : '',
-            email: form.email ? form.email.value : '',
-            phone: form.phone ? form.phone.value : '',
+            arrival: getFormFieldValue(form, 'arrival'),
+            departure: getFormFieldValue(form, 'departure'),
+            guests: getFormFieldValue(form, 'guests'),
+            coupon: getFormFieldValue(form, 'coupon'),
+            first_name: getFormFieldValue(form, 'first_name'),
+            last_name: getFormFieldValue(form, 'last_name'),
+            email: getFormFieldValue(form, 'email'),
+            phone: getFormFieldValue(form, 'phone'),
             payment_option: paymentOption
         };
     }
@@ -154,6 +298,88 @@
 
         node.classList.add(type);
         node.textContent = text;
+    }
+
+    function formatSuggestionRange(state, suggestion) {
+        if (!suggestion || !suggestion.start || !suggestion.end) {
+            return '';
+        }
+
+        var listingData = state ? state.listingData : null;
+        var template = getText(listingData, 'availabilitySuggestion', 'Next available stay: %1$s to %2$s.');
+        var startValue = toCalendarValue(suggestion.start);
+        var endValue = toCalendarValue(suggestion.end);
+
+        if (!startValue || !endValue) {
+            return '';
+        }
+
+        var startLabel = formatDate(startValue);
+        var endLabel = formatDate(endValue);
+
+        return template.replace('%1$s', startLabel).replace('%2$s', endLabel);
+    }
+
+    function toCalendarValue(value) {
+        if (!value) {
+            return '';
+        }
+
+        if (value instanceof Date) {
+            return toISODate(value);
+        }
+
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+
+        return '';
+    }
+
+    function setAvailabilityState(state, type, message, suggestionText, suggestionRange) {
+        if (!state || !state.availability) {
+            return;
+        }
+
+        var container = state.availability;
+        var classes = ['is-available', 'is-unavailable', 'is-idle', 'is-checking', 'is-error'];
+
+        for (var i = 0; i < classes.length; i += 1) {
+            container.classList.remove(classes[i]);
+        }
+
+        if (type) {
+            container.classList.add('is-' + type);
+        }
+
+        if (state.availabilityStatus) {
+            state.availabilityStatus.textContent = message || '';
+        }
+
+        if (state.availabilitySuggestion) {
+            state.availabilitySuggestion.textContent = suggestionText || '';
+        }
+
+        if (state.availabilityApply) {
+            if (suggestionRange && suggestionRange.start && suggestionRange.end) {
+                state.availabilityApply.hidden = false;
+                state.availabilityApply.textContent = getText(state.listingData, 'availabilityApply', 'Use these dates');
+            } else {
+                state.availabilityApply.hidden = true;
+            }
+        }
+
+        var suggestionStart = suggestionRange ? toCalendarValue(suggestionRange.start) : '';
+        var suggestionEnd = suggestionRange ? toCalendarValue(suggestionRange.end) : '';
+
+        state.suggestedRange = suggestionStart && suggestionEnd
+            ? {
+                  start: suggestionStart,
+                  end: suggestionEnd
+              }
+            : null;
+
+        state.availabilityStatusType = type || '';
     }
 
     function parseISODate(value) {
@@ -280,6 +506,871 @@
         return diff;
     }
 
+    function addDays(date, days) {
+        if (!(date instanceof Date)) {
+            return null;
+        }
+
+        var clone = new Date(date.getTime());
+        clone.setDate(clone.getDate() + days);
+        return clone;
+    }
+
+    function toISODate(date) {
+        if (!(date instanceof Date)) {
+            return '';
+        }
+
+        var month = padTwo(date.getMonth() + 1);
+        var day = padTwo(date.getDate());
+
+        return date.getFullYear() + '-' + month + '-' + day;
+    }
+
+    function buildBlockedRanges(blocked) {
+        if (!Array.isArray(blocked)) {
+            return [];
+        }
+
+        var ranges = [];
+
+        for (var i = 0; i < blocked.length; i += 1) {
+            var windowItem = blocked[i];
+            if (!windowItem) {
+                continue;
+            }
+
+            var start = parseISODate(windowItem.start);
+            var end = parseISODate(windowItem.end);
+
+            if (!start || !end || !(start instanceof Date) || !(end instanceof Date)) {
+                continue;
+            }
+
+            if (start.getTime() >= end.getTime()) {
+                continue;
+            }
+
+            ranges.push({
+                start: start,
+                end: end
+            });
+        }
+
+        ranges.sort(function (a, b) {
+            return a.start.getTime() - b.start.getTime();
+        });
+
+        return ranges;
+    }
+
+    function buildBlockedDateMap(blockedRanges) {
+        var map = Object.create(null);
+
+        if (!Array.isArray(blockedRanges) || !blockedRanges.length) {
+            return map;
+        }
+
+        for (var i = 0; i < blockedRanges.length; i += 1) {
+            var range = blockedRanges[i];
+            if (!range || !(range.start instanceof Date) || !(range.end instanceof Date)) {
+                continue;
+            }
+
+            var cursor = new Date(range.start.getTime());
+
+            while (cursor < range.end) {
+                var key = toISODate(cursor);
+                if (key) {
+                    map[key] = true;
+                }
+
+                cursor = addDays(cursor, 1);
+                if (!(cursor instanceof Date)) {
+                    break;
+                }
+            }
+        }
+
+        return map;
+    }
+
+    function getCalendarWindow(data) {
+        var windowInfo = data && data.window ? data.window : null;
+        var start = windowInfo && parseISODate(windowInfo.start);
+        var today = new Date();
+
+        if (!(start instanceof Date)) {
+            start = new Date(today.getFullYear(), today.getMonth(), 1);
+        } else {
+            start = new Date(start.getFullYear(), start.getMonth(), 1);
+        }
+
+        var months = 3;
+
+        if (windowInfo && typeof windowInfo.months !== 'undefined') {
+            var parsedMonths = Number(windowInfo.months);
+            if (!isNaN(parsedMonths) && parsedMonths > 0) {
+                months = parsedMonths;
+            }
+        } else if (windowInfo && windowInfo.end) {
+            var end = parseISODate(windowInfo.end);
+            if (end instanceof Date) {
+                end = new Date(end.getFullYear(), end.getMonth(), 1);
+                var diffMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+                if (diffMonths > 0) {
+                    months = diffMonths;
+                }
+            }
+        }
+
+        if (months > 12) {
+            months = 12;
+        } else if (months < 1) {
+            months = 1;
+        }
+
+        return {
+            start: start,
+            months: months
+        };
+    }
+
+    function getWeekdayNames() {
+        var names = [];
+        var reference = new Date(2020, 5, 7); // Sunday reference.
+
+        for (var i = 0; i < 7; i += 1) {
+            var date = new Date(reference.getTime());
+            date.setDate(reference.getDate() + i);
+
+            try {
+                names.push(date.toLocaleDateString(undefined, { weekday: 'short' }));
+            } catch (error) {
+                var fallback = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                return fallback;
+            }
+        }
+
+        return names;
+    }
+
+    function padTwo(value) {
+        var string = String(value);
+
+        while (string.length < 2) {
+            string = '0' + string;
+        }
+
+        return string;
+    }
+
+    function formatMonthLabel(date) {
+        if (!(date instanceof Date)) {
+            return '';
+        }
+
+        try {
+            return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        } catch (error) {
+            return date.getFullYear() + '-' + padTwo(date.getMonth() + 1);
+        }
+    }
+
+    function getMonthStart(date) {
+        if (!(date instanceof Date)) {
+            return null;
+        }
+
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+
+    function getMonthDifference(start, target) {
+        if (!(start instanceof Date) || !(target instanceof Date)) {
+            return 0;
+        }
+
+        return (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
+    }
+
+    function createLegendItem(className, label) {
+        var item = document.createElement('span');
+        item.className = 'vrsp-calendar__legend-item';
+
+        var swatch = document.createElement('span');
+        swatch.className = 'vrsp-calendar__legend-swatch ' + className;
+        swatch.setAttribute('aria-hidden', 'true');
+
+        var text = document.createElement('span');
+        text.className = 'vrsp-calendar__legend-label';
+        text.textContent = label;
+
+        item.appendChild(swatch);
+        item.appendChild(text);
+
+        return item;
+    }
+
+    function createCalendarMonth(state, year, month, blockedMap, today, labels) {
+        var container = document.createElement('section');
+        container.className = 'vrsp-calendar__month';
+
+        var heading = document.createElement('h3');
+        heading.className = 'vrsp-calendar__month-name';
+        heading.textContent = formatMonthLabel(new Date(year, month, 1));
+        container.appendChild(heading);
+
+        var table = document.createElement('table');
+        table.className = 'vrsp-calendar';
+        table.setAttribute('role', 'grid');
+
+        var thead = document.createElement('thead');
+        var headRow = document.createElement('tr');
+        var weekdays = getWeekdayNames();
+
+        for (var i = 0; i < weekdays.length; i += 1) {
+            var th = document.createElement('th');
+            th.scope = 'col';
+            th.textContent = weekdays[i];
+            headRow.appendChild(th);
+        }
+
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        var firstDay = new Date(year, month, 1).getDay();
+        var daysInMonth = new Date(year, month + 1, 0).getDate();
+        var day = 1;
+
+        for (var week = 0; week < 6; week += 1) {
+            var row = document.createElement('tr');
+
+            for (var dow = 0; dow < 7; dow += 1) {
+                var cell = document.createElement('td');
+                cell.className = 'vrsp-calendar__day';
+
+                if ((week === 0 && dow < firstDay) || day > daysInMonth) {
+                    cell.classList.add('is-empty');
+                    cell.setAttribute('aria-hidden', 'true');
+                    row.appendChild(cell);
+                    continue;
+                }
+
+                var currentDate = new Date(year, month, day);
+                var iso = toISODate(currentDate);
+                var label = formatDate(iso);
+                var isBlocked = !!blockedMap[iso];
+                var midnightToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                var isPast = currentDate < midnightToday;
+                var isDisabled = isBlocked || isPast;
+
+                var number = document.createElement('span');
+                number.className = 'vrsp-calendar__day-number';
+                number.textContent = day.toString();
+                cell.appendChild(number);
+
+                if (isBlocked) {
+                    var mark = document.createElement('span');
+                    mark.className = 'vrsp-calendar__day-status';
+                    mark.textContent = '×';
+                    mark.setAttribute('aria-hidden', 'true');
+                    cell.appendChild(mark);
+                    cell.classList.add('is-blocked');
+                    cell.setAttribute('aria-disabled', 'true');
+                    cell.setAttribute('title', labels.unavailable + ' ' + label);
+                    cell.setAttribute('aria-label', labels.unavailable + ' ' + label);
+                } else if (isPast) {
+                    cell.classList.add('is-past');
+                    cell.setAttribute('aria-disabled', 'true');
+                    cell.setAttribute('title', labels.unavailable + ' ' + label);
+                    cell.setAttribute('aria-label', labels.unavailable + ' ' + label);
+                } else {
+                    cell.classList.add('is-available');
+                    cell.setAttribute('role', 'button');
+                    cell.tabIndex = 0;
+                    cell.setAttribute('title', labels.available + ' ' + label);
+                    cell.setAttribute('aria-label', labels.available + ' ' + label);
+                }
+
+                cell.dataset.date = iso;
+                cell.setAttribute('data-calendar-day', iso);
+                cell.setAttribute('data-calendar-disabled', isDisabled ? '1' : '0');
+                state.calendarCells[iso] = cell;
+
+                row.appendChild(cell);
+                day += 1;
+            }
+
+            tbody.appendChild(row);
+
+            if (day > daysInMonth) {
+                break;
+            }
+        }
+
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        return container;
+    }
+
+    function renderCalendar(state) {
+        if (!state || !state.calendar) {
+            return;
+        }
+
+        clearChildren(state.calendar);
+
+        state.calendarCells = Object.create(null);
+
+        var data = state.availabilityData || {};
+        var blockedMap = buildBlockedDateMap(state.blockedRanges || []);
+        state.blockedDateMap = blockedMap;
+
+        var fallbackWindow = getCalendarWindow(data);
+        var fallbackStart = fallbackWindow.start instanceof Date ? fallbackWindow.start : null;
+        var fallbackMonths = fallbackWindow.months || 3;
+
+        var windowStart = state.calendarWindowStart instanceof Date ? state.calendarWindowStart : fallbackStart;
+        if (!(windowStart instanceof Date)) {
+            var todayBase = new Date();
+            windowStart = new Date(todayBase.getFullYear(), todayBase.getMonth(), 1);
+        }
+
+        if (!(state.calendarWindowStart instanceof Date)) {
+            state.calendarWindowStart = windowStart;
+        }
+
+        var windowMonths = state.calendarWindowMonths || fallbackMonths;
+        if (!windowMonths || windowMonths < 1) {
+            windowMonths = fallbackMonths;
+        }
+        if (!windowMonths || windowMonths < 1) {
+            windowMonths = CALENDAR_VIEW_MONTHS;
+        }
+        if (!state.calendarWindowMonths) {
+            state.calendarWindowMonths = windowMonths;
+        }
+
+        var viewMonths = state.calendarViewMonths || CALENDAR_VIEW_MONTHS;
+        if (viewMonths < 1) {
+            viewMonths = 1;
+        }
+        if (windowMonths < viewMonths) {
+            viewMonths = windowMonths;
+        }
+        state.calendarViewMonths = viewMonths;
+
+        var offset = typeof state.calendarViewOffset === 'number' ? state.calendarViewOffset : 0;
+        var maxOffset = Math.max(0, windowMonths - viewMonths);
+        if (offset > maxOffset) {
+            offset = maxOffset;
+            state.calendarViewOffset = offset;
+        }
+        if (offset < 0) {
+            offset = 0;
+            state.calendarViewOffset = offset;
+        }
+
+        var viewStart = new Date(windowStart.getFullYear(), windowStart.getMonth() + offset, 1);
+        var remainingMonths = windowMonths - offset;
+        var displayMonths = remainingMonths < viewMonths ? remainingMonths : viewMonths;
+        if (displayMonths < 1) {
+            displayMonths = viewMonths;
+        }
+
+        var controls = document.createElement('div');
+        controls.className = 'vrsp-calendar__controls';
+
+        var prev = document.createElement('button');
+        prev.type = 'button';
+        prev.className = 'vrsp-calendar__nav vrsp-calendar__nav--prev';
+        prev.setAttribute('aria-label', getText(state.listingData, 'availabilityPreviousMonth', 'Previous month'));
+        prev.disabled = offset <= 0;
+
+        var prevIcon = document.createElement('span');
+        prevIcon.setAttribute('aria-hidden', 'true');
+        prevIcon.textContent = '‹';
+        prev.appendChild(prevIcon);
+
+        prev.addEventListener('click', function () {
+            setCalendarViewOffset(state, offset - CALENDAR_VIEW_STEP);
+        });
+
+        var next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'vrsp-calendar__nav vrsp-calendar__nav--next';
+        next.setAttribute('aria-label', getText(state.listingData, 'availabilityNextMonth', 'Next month'));
+
+        var rangeEnd = new Date(viewStart.getFullYear(), viewStart.getMonth() + (displayMonths > 0 ? displayMonths - 1 : 0), 1);
+        next.disabled = offset >= maxOffset;
+
+        var nextIcon = document.createElement('span');
+        nextIcon.setAttribute('aria-hidden', 'true');
+        nextIcon.textContent = '›';
+        next.appendChild(nextIcon);
+
+        next.addEventListener('click', function () {
+            setCalendarViewOffset(state, offset + CALENDAR_VIEW_STEP);
+        });
+
+        var range = document.createElement('div');
+        range.className = 'vrsp-calendar__range';
+
+        if (displayMonths > 1) {
+            range.textContent = formatMonthLabel(viewStart) + ' – ' + formatMonthLabel(rangeEnd);
+        } else {
+            range.textContent = formatMonthLabel(viewStart);
+        }
+
+        controls.appendChild(prev);
+        controls.appendChild(range);
+        controls.appendChild(next);
+
+        state.calendar.appendChild(controls);
+
+        var legend = document.createElement('div');
+        legend.className = 'vrsp-calendar__legend';
+
+        legend.appendChild(
+            createLegendItem(
+                'is-available',
+                getText(state.listingData, 'availabilityLegendAvailable', 'Available')
+            )
+        );
+        legend.appendChild(
+            createLegendItem(
+                'is-blocked',
+                getText(state.listingData, 'availabilityLegendUnavailable', 'Unavailable')
+            )
+        );
+
+        state.calendar.appendChild(legend);
+
+        var monthsWrapper = document.createElement('div');
+        monthsWrapper.className = 'vrsp-calendar__months';
+
+        var labels = {
+            available: getText(state.listingData, 'availabilityDayAvailable', 'Available on'),
+            unavailable: getText(state.listingData, 'availabilityDayUnavailable', 'Not available on')
+        };
+
+        var today = new Date();
+        for (var i = 0; i < displayMonths; i += 1) {
+            var monthDate = new Date(viewStart.getFullYear(), viewStart.getMonth() + i, 1);
+            monthsWrapper.appendChild(
+                createCalendarMonth(state, monthDate.getFullYear(), monthDate.getMonth(), blockedMap, today, labels)
+            );
+        }
+
+        state.calendar.appendChild(monthsWrapper);
+
+        if (state.form) {
+            updateCalendarSelection(state, readForm(state.form));
+        }
+    }
+
+    function setCalendarViewOffset(state, nextOffset) {
+        if (!state) {
+            return;
+        }
+
+        var viewMonths = state.calendarViewMonths || CALENDAR_VIEW_MONTHS;
+        if (viewMonths < 1) {
+            viewMonths = 1;
+        }
+
+        var windowMonths = state.calendarWindowMonths || viewMonths;
+        if (!windowMonths || windowMonths < 1) {
+            windowMonths = viewMonths;
+        }
+
+        var maxOffset = Math.max(0, windowMonths - viewMonths);
+
+        var offset = typeof nextOffset === 'number' ? nextOffset : 0;
+        if (offset < 0) {
+            offset = 0;
+        }
+        if (offset > maxOffset) {
+            offset = maxOffset;
+        }
+
+        if (typeof state.calendarViewOffset === 'number' && state.calendarViewOffset === offset) {
+            return;
+        }
+
+        state.calendarViewOffset = offset;
+        renderCalendar(state);
+    }
+
+    function getCalendarCell(state, node) {
+        if (!state || !node) {
+            return null;
+        }
+
+        var root = state.calendar;
+        if (!root) {
+            return null;
+        }
+
+        var current = node;
+
+        while (current && current !== root) {
+            if (current.classList && current.classList.contains('vrsp-calendar__day')) {
+                return current;
+            }
+            current = current.parentNode;
+        }
+
+        if (current && current.classList && current.classList.contains('vrsp-calendar__day')) {
+            return current;
+        }
+
+        return null;
+    }
+
+    function isCalendarCellDisabled(cell) {
+        if (!cell) {
+            return true;
+        }
+
+        if (cell.getAttribute('data-calendar-disabled') === '1') {
+            return true;
+        }
+
+        if (cell.classList && (cell.classList.contains('is-blocked') || cell.classList.contains('is-past'))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function isCalendarRangeSelectable(state, arrivalDate, departureDate) {
+        if (!state) {
+            return false;
+        }
+
+        if (!(arrivalDate instanceof Date) || !(departureDate instanceof Date)) {
+            return false;
+        }
+
+        if (departureDate.getTime() <= arrivalDate.getTime()) {
+            return false;
+        }
+
+        var map = state.blockedDateMap || {};
+        var cursor = new Date(arrivalDate.getTime());
+
+        while (cursor < departureDate) {
+            var key = toISODate(cursor);
+            if (map && key && map[key]) {
+                return false;
+            }
+
+            cursor = addDays(cursor, 1);
+            if (!(cursor instanceof Date)) {
+                return false;
+            }
+        }
+
+        var departureKey = toISODate(departureDate);
+        if (map && departureKey && map[departureKey]) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function ensureCalendarRangeVisible(state, arrivalISO, departureISO) {
+        if (!state) {
+            return;
+        }
+
+        var windowStart = state.calendarWindowStart instanceof Date ? state.calendarWindowStart : null;
+        var windowMonths = state.calendarWindowMonths;
+        var viewMonths = state.calendarViewMonths || CALENDAR_VIEW_MONTHS;
+
+        if (!(windowStart instanceof Date) || !windowMonths || windowMonths < 1) {
+            return;
+        }
+
+        if (viewMonths < 1) {
+            viewMonths = 1;
+        }
+
+        var arrivalDate = parseISODate(arrivalISO);
+        var departureDate = parseISODate(departureISO);
+
+        if (!(arrivalDate instanceof Date) && !(departureDate instanceof Date)) {
+            return;
+        }
+
+        var minIndex = null;
+        var maxIndex = null;
+
+        if (arrivalDate instanceof Date) {
+            var arrivalIndex = getMonthDifference(windowStart, arrivalDate);
+            minIndex = arrivalIndex;
+            maxIndex = arrivalIndex;
+        }
+
+        if (departureDate instanceof Date) {
+            var departureAnchor = addDays(departureDate, -1);
+            if (!(departureAnchor instanceof Date) || (arrivalDate instanceof Date && departureAnchor < arrivalDate)) {
+                departureAnchor = new Date(departureDate.getFullYear(), departureDate.getMonth(), 1);
+            }
+            var departureIndex = getMonthDifference(windowStart, departureAnchor);
+
+            if (minIndex === null || departureIndex < minIndex) {
+                minIndex = departureIndex;
+            }
+            if (maxIndex === null || departureIndex > maxIndex) {
+                maxIndex = departureIndex;
+            }
+        }
+
+        if (minIndex === null || maxIndex === null) {
+            return;
+        }
+
+        if (minIndex < 0) {
+            minIndex = 0;
+        }
+
+        if (maxIndex > windowMonths - 1) {
+            maxIndex = windowMonths - 1;
+        }
+
+        var offset = typeof state.calendarViewOffset === 'number' ? state.calendarViewOffset : 0;
+        var visibleMax = offset + viewMonths - 1;
+
+        if (minIndex < offset) {
+            setCalendarViewOffset(state, minIndex);
+            return;
+        }
+
+        if (maxIndex > visibleMax) {
+            setCalendarViewOffset(state, maxIndex - viewMonths + 1);
+        }
+    }
+
+    function commitCalendarSelection(state, arrivalISO, departureISO) {
+        if (!state || !state.form) {
+            return;
+        }
+
+        var arrivalValue = toCalendarValue(arrivalISO);
+        var departureValue = toCalendarValue(departureISO);
+
+        setFormFieldValue(state.form, 'arrival', arrivalValue);
+        setFormFieldValue(state.form, 'departure', departureValue);
+
+        ensureCalendarRangeVisible(state, arrivalISO, departureISO);
+
+        updateCalendarSelection(state, {
+            arrival: arrivalValue,
+            departure: departureValue
+        });
+
+        dispatchBubbledEvent(state.form, 'input');
+        dispatchBubbledEvent(state.form, 'change');
+    }
+
+    function selectCalendarDate(state, isoDate) {
+        if (!state || !isoDate) {
+            return;
+        }
+
+        var cell = state.calendarCells ? state.calendarCells[isoDate] : null;
+        if (!cell || isCalendarCellDisabled(cell)) {
+            return;
+        }
+
+        var selectedDate = parseISODate(isoDate);
+        if (!(selectedDate instanceof Date)) {
+            return;
+        }
+
+        var payload = readForm(state.form);
+        var arrival = parseISODate(payload.arrival);
+        var departure = parseISODate(payload.departure);
+
+        if (!arrival || (arrival && departure)) {
+            commitCalendarSelection(state, isoDate, '');
+            return;
+        }
+
+        if (selectedDate.getTime() <= arrival.getTime()) {
+            commitCalendarSelection(state, isoDate, '');
+            return;
+        }
+
+        if (!isCalendarRangeSelectable(state, arrival, selectedDate)) {
+            commitCalendarSelection(state, isoDate, '');
+            return;
+        }
+
+        commitCalendarSelection(state, toISODate(arrival), isoDate);
+    }
+
+    function handleCalendarInteraction(state, event) {
+        if (!state || !event) {
+            return;
+        }
+
+        if (event.type === 'click' && typeof event.button !== 'undefined' && event.button !== 0) {
+            return;
+        }
+
+        var cell = getCalendarCell(state, event.target);
+        if (!cell || isCalendarCellDisabled(cell)) {
+            return;
+        }
+
+        var iso = cell.getAttribute('data-calendar-day') || cell.dataset.date;
+        if (!iso) {
+            return;
+        }
+
+        if (event.type === 'keydown') {
+            var key = event.key || event.keyCode;
+            if (key === 'Enter' || key === ' ' || key === 13 || key === 32) {
+                event.preventDefault();
+                selectCalendarDate(state, iso);
+            }
+            return;
+        }
+
+        selectCalendarDate(state, iso);
+    }
+
+    function updateCalendarSelection(state, payload) {
+        if (!state || !state.calendarCells) {
+            return;
+        }
+
+        var keys = Object.keys(state.calendarCells);
+        for (var i = 0; i < keys.length; i += 1) {
+            var key = keys[i];
+            var cell = state.calendarCells[key];
+            if (!cell) {
+                continue;
+            }
+            cell.classList.remove('is-selected', 'is-selected-start', 'is-selected-end');
+        }
+
+        if (!payload) {
+            return;
+        }
+
+        var arrival = parseISODate(payload.arrival);
+        var departure = parseISODate(payload.departure);
+
+        if (!(arrival instanceof Date)) {
+            return;
+        }
+
+        var arrivalKey = toISODate(arrival);
+        var arrivalCell = state.calendarCells[arrivalKey];
+
+        if (arrivalCell) {
+            arrivalCell.classList.add('is-selected', 'is-selected-start');
+        }
+
+        if (!(departure instanceof Date) || departure.getTime() < arrival.getTime()) {
+            return;
+        }
+
+        var cursor = new Date(arrival.getTime());
+
+        while (cursor.getTime() <= departure.getTime()) {
+            var key = toISODate(cursor);
+            var cell = state.calendarCells[key];
+
+            if (cell) {
+                cell.classList.add('is-selected');
+
+                if (key === arrivalKey) {
+                    cell.classList.add('is-selected-start');
+                }
+
+                if (cursor.getTime() === departure.getTime()) {
+                    cell.classList.add('is-selected-end');
+                }
+            }
+
+            cursor = addDays(cursor, 1);
+            if (!(cursor instanceof Date)) {
+                break;
+            }
+        }
+    }
+
+    function findNextAvailableRange(blockedRanges, arrival, departure) {
+        if (!(arrival instanceof Date) || !(departure instanceof Date)) {
+            return null;
+        }
+
+        var nights = differenceInDays(arrival, departure);
+        if (nights === null || nights <= 0) {
+            return null;
+        }
+
+        var blocked = Array.isArray(blockedRanges) ? blockedRanges : [];
+        if (!blocked.length) {
+            return null;
+        }
+        var maxIterations = 365;
+        var candidateStart = new Date(arrival.getTime());
+
+        for (var i = 0; i < maxIterations; i += 1) {
+            var candidateEnd = addDays(candidateStart, nights);
+            if (!(candidateEnd instanceof Date)) {
+                break;
+            }
+
+            var conflict = false;
+            var skipTo = null;
+
+            for (var j = 0; j < blocked.length; j += 1) {
+                var range = blocked[j];
+                if (!range || !(range.start instanceof Date) || !(range.end instanceof Date)) {
+                    continue;
+                }
+
+                if (candidateEnd <= range.start || candidateStart >= range.end) {
+                    continue;
+                }
+
+                conflict = true;
+
+                if (!skipTo || range.end > skipTo) {
+                    skipTo = new Date(range.end.getTime());
+                }
+            }
+
+            if (!conflict) {
+                return {
+                    start: candidateStart,
+                    end: candidateEnd
+                };
+            }
+
+            if (!skipTo) {
+                skipTo = addDays(candidateStart, 1);
+            }
+
+            if (!(skipTo instanceof Date)) {
+                break;
+            }
+
+            candidateStart = skipTo;
+        }
+
+        return null;
+    }
+
     function roundCurrency(value) {
         var amount = Number(value || 0);
         if (!isFinite(amount)) {
@@ -292,6 +1383,9 @@
     function updateSummary(state, payload) {
         var summary = state.summaryTargets;
         if (!summary) {
+            if (state) {
+                updateCalendarSelection(state, payload);
+            }
             return;
         }
 
@@ -307,6 +1401,8 @@
             var nights = computeNights(payload);
             summary.nights.textContent = nights !== null ? nights : '—';
         }
+
+        updateCalendarSelection(state, payload);
     }
 
     function resetPricing(state) {
@@ -574,31 +1670,23 @@
     }
 
     function renderAvailability(state, payload) {
-        var calendar = state.calendar;
+        if (!state) {
+            return;
+        }
 
-        if (calendar) {
-            clearChildren(calendar);
+        var data = payload || {};
+        state.availabilityData = data;
+        state.blockedRanges = buildBlockedRanges(data.blocked || []);
+        renderCalendar(state);
 
-            var blocked = (payload && payload.blocked) || [];
-
-            if (!blocked.length) {
-                var message = document.createElement('p');
-                message.textContent = getText(state.listingData, 'availabilityEmpty', 'Your preferred dates are open!');
-                calendar.appendChild(message);
-            } else {
-                var limit = Math.min(blocked.length, 8);
-                for (var i = 0; i < limit; i += 1) {
-                    var windowItem = blocked[i];
-                    if (!windowItem) {
-                        continue;
-                    }
-
-                    var tag = document.createElement('span');
-                    tag.className = 'vrsp-availability__tag';
-                    tag.textContent = windowItem.start + ' → ' + windowItem.end;
-                    calendar.appendChild(tag);
-                }
-            }
+        if (!state.availabilityStatusType) {
+            setAvailabilityState(
+                state,
+                'idle',
+                getText(state.listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+                '',
+                null
+            );
         }
     }
 
@@ -610,7 +1698,24 @@
             return;
         }
 
-        fetch(listingData.api + '/availability')
+        var months = state.calendarRequestMonths || DEFAULT_AVAILABILITY_MONTHS;
+        if (!months || months < 1) {
+            months = DEFAULT_AVAILABILITY_MONTHS;
+        }
+        if (months > 12) {
+            months = 12;
+        }
+
+        var today = new Date();
+        var windowStart = getMonthStart(today);
+        var previousStart = state.calendarWindowStart instanceof Date ? state.calendarWindowStart : null;
+
+        var url = listingData.api + '/availability';
+        if (months) {
+            url += (url.indexOf('?') === -1 ? '?' : '&') + 'months=' + encodeURIComponent(months);
+        }
+
+        fetch(url)
             .then(function (response) {
                 if (!response.ok) {
                     throw new Error('Failed');
@@ -618,6 +1723,21 @@
                 return response.json();
             })
             .then(function (data) {
+                state.calendarWindowStart = windowStart;
+                state.calendarWindowMonths = months;
+                var maxOffset = Math.max(0, months - (state.calendarViewMonths || CALENDAR_VIEW_MONTHS));
+                if (
+                    !previousStart ||
+                    previousStart.getFullYear() !== windowStart.getFullYear() ||
+                    previousStart.getMonth() !== windowStart.getMonth()
+                ) {
+                    state.calendarViewOffset = 0;
+                } else if (
+                    typeof state.calendarViewOffset !== 'number' ||
+                    state.calendarViewOffset > maxOffset
+                ) {
+                    state.calendarViewOffset = Math.min(state.calendarViewOffset || 0, maxOffset);
+                }
                 renderAvailability(state, data || {});
             })
             .catch(function () {
@@ -652,11 +1772,25 @@
                 'info',
                 getText(listingData, 'quotePrompt', 'Select arrival and departure dates to see pricing.')
             );
+            setAvailabilityState(
+                state,
+                'idle',
+                getText(listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+                '',
+                null
+            );
             return;
         }
 
         setButtonDisabled(state.continueButton, true);
         writeMessage(state, 'info', getText(listingData, 'quoteLoading', 'Calculating pricing…'));
+        setAvailabilityState(
+            state,
+            'checking',
+            getText(listingData, 'availabilityChecking', 'Checking availability…'),
+            '',
+            null
+        );
 
         if (state.quoteAbort && supportsAbortController) {
             state.quoteAbort.abort();
@@ -677,16 +1811,37 @@
 
         fetch(listingData.api + '/quote', options)
             .then(function (response) {
-                if (!response.ok) {
-                    throw new Error(getText(listingData, 'genericError', 'Unable to process booking. Please try again.'));
-                }
-                return response.json();
+                return response
+                    .json()
+                    .catch(function () {
+                        return {};
+                    })
+                    .then(function (data) {
+                        if (!response.ok) {
+                            var message = (data && data.error)
+                                ? data.error
+                                : getText(listingData, 'genericError', 'Unable to process booking. Please try again.');
+                            var error = new Error(message);
+                            error.status = response.status;
+                            error.data = data;
+                            throw error;
+                        }
+
+                        return data;
+                    });
             })
             .then(function (quote) {
-                state.latestPayload = Object.assign({}, payload);
+                state.latestPayload = assign({}, payload);
                 state.latestQuote = quote;
 
                 writePricing(state, payload, quote);
+                setAvailabilityState(
+                    state,
+                    'available',
+                    getText(listingData, 'availabilityAvailable', 'Great news! Your dates are available.'),
+                    '',
+                    null
+                );
 
                 if (quote && quote.coupon_error) {
                     setButtonDisabled(state.continueButton, true);
@@ -720,11 +1875,48 @@
                     return;
                 }
 
-                state.latestPayload = Object.assign({}, payload);
+                state.latestPayload = assign({}, payload);
                 state.latestQuote = null;
                 resetPricing(state);
 
                 var fallback = getText(listingData, 'genericError', 'Unable to process booking. Please try again.');
+
+                if (error && error.status === 409) {
+                    var unavailableMessage = error.message || getText(
+                        listingData,
+                        'availabilityUnavailable',
+                        'Those dates are unavailable. Please choose another stay.'
+                    );
+
+                    var arrivalDate = parseISODate(payload.arrival);
+                    var departureDate = parseISODate(payload.departure);
+                    var nextRange = findNextAvailableRange(state.blockedRanges, arrivalDate, departureDate);
+                    var suggestionRange = null;
+                    var suggestionText = '';
+
+                    if (nextRange && nextRange.start && nextRange.end) {
+                        suggestionRange = {
+                            start: toISODate(nextRange.start),
+                            end: toISODate(nextRange.end)
+                        };
+                        suggestionText = formatSuggestionRange(state, suggestionRange);
+                    } else {
+                        suggestionText = getText(
+                            listingData,
+                            'availabilityNoSuggestion',
+                            "We'll follow up shortly with the next available dates."
+                        );
+                    }
+
+                    setAvailabilityState(state, 'unavailable', unavailableMessage, suggestionText, suggestionRange);
+
+                    var combinedMessage = suggestionText ? unavailableMessage + ' ' + suggestionText : unavailableMessage;
+                    writeMessage(state, 'error', combinedMessage.trim());
+                    setButtonDisabled(state.continueButton, true);
+                    return;
+                }
+
+                setAvailabilityState(state, 'error', (error && error.message) || fallback, '', null);
                 writeMessage(state, 'error', (error && error.message) || fallback);
                 setButtonDisabled(state.continueButton, true);
             })
@@ -844,6 +2036,9 @@
         var continueButton = continueButtons.length ? continueButtons[0] : null;
         var message = widget.querySelector(SELECTORS.message);
         var availability = widget.querySelector(SELECTORS.availability);
+        var availabilityStatus = availability ? availability.querySelector('[data-availability="status"]') : null;
+        var availabilitySuggestion = availability ? availability.querySelector('[data-availability="suggestion"]') : null;
+        var availabilityApply = availability ? availability.querySelector('[data-availability="apply"]') : null;
         var calendar = widget.querySelector(SELECTORS.calendar);
 
         if (continueButtons.length > 1) {
@@ -886,6 +2081,9 @@
             continueButton: continueButton,
             message: message,
             availability: availability,
+            availabilityStatus: availabilityStatus,
+            availabilitySuggestion: availabilitySuggestion,
+            availabilityApply: availabilityApply,
             calendar: calendar,
             baseRate: baseRate,
             formatCurrency: createFormatter(currency),
@@ -897,8 +2095,41 @@
             latestQuote: null,
             lastBreakdown: null,
             quoteTimer: null,
-            quoteAbort: null
+            quoteAbort: null,
+            availabilityStatusType: '',
+            blockedRanges: [],
+            availabilityData: null,
+            suggestedRange: null,
+            calendarCells: Object.create(null),
+            blockedDateMap: Object.create(null),
+            calendarRequestMonths: DEFAULT_AVAILABILITY_MONTHS,
+            calendarWindowStart: null,
+            calendarWindowMonths: 0,
+            calendarViewMonths: CALENDAR_VIEW_MONTHS,
+            calendarViewOffset: 0
         };
+
+        if (availabilityApply) {
+            availabilityApply.addEventListener('click', function () {
+                if (!state.suggestedRange) {
+                    return;
+                }
+
+                commitCalendarSelection(state, state.suggestedRange.start, state.suggestedRange.end);
+            });
+        }
+
+        if (calendar) {
+            calendar.addEventListener('click', function (event) {
+                handleCalendarInteraction(state, event);
+            });
+
+            calendar.addEventListener('keydown', function (event) {
+                if (event && (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13 || event.keyCode === 32)) {
+                    handleCalendarInteraction(state, event);
+                }
+            });
+        }
 
         form.addEventListener('submit', function (event) {
             event.preventDefault();
@@ -923,11 +2154,18 @@
                     'info',
                     getText(state.listingData, 'quotePrompt', 'Select arrival and departure dates to see pricing.')
                 );
+                setAvailabilityState(
+                    state,
+                    'idle',
+                    getText(state.listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+                    '',
+                    null
+                );
                 return;
             }
 
             if (state.latestQuote && state.latestPayload && sameCoreQuoteFields(payload, state.latestPayload)) {
-                state.latestPayload = Object.assign({}, state.latestPayload, payload);
+                state.latestPayload = assign({}, state.latestPayload, payload);
                 writePricing(state, payload, state.latestQuote);
 
                 if (hasCheckoutFields(payload)) {
@@ -960,6 +2198,13 @@
             resetPricing(state);
             setButtonDisabled(state.continueButton, true);
             writeMessage(state, 'info', getText(state.listingData, 'quoteLoading', 'Calculating pricing…'));
+            setAvailabilityState(
+                state,
+                'checking',
+                getText(state.listingData, 'availabilityChecking', 'Checking availability…'),
+                '',
+                null
+            );
             scheduleQuote(state);
         };
 
@@ -985,6 +2230,14 @@
 
         updateSummary(state, readForm(form));
         resetPricing(state);
+        setAvailabilityState(
+            state,
+            'idle',
+            getText(state.listingData, 'availabilityPrompt', 'Start by selecting your check-in and checkout dates.'),
+            '',
+            null
+        );
+        renderCalendar(state);
         fetchAvailability(state);
         requestQuote(state);
     }
@@ -1018,6 +2271,7 @@
         state.baseRate = baseRate;
         state.formatCurrency = createFormatter(currency);
 
+        renderCalendar(state);
         fetchAvailability(state);
         requestQuote(state);
     }
