@@ -173,19 +173,38 @@ return implode( "\r\n", $output );
 
         $events = [];
 
-foreach ( $bookings as $booking ) {
-$arrival   = strtotime( get_post_meta( $booking->ID, '_vrsp_arrival', true ) );
-$departure = strtotime( get_post_meta( $booking->ID, '_vrsp_departure', true ) );
-if ( ! $arrival || ! $departure ) {
-continue;
-}
+        $timezone = wp_timezone();
+
+        foreach ( $bookings as $booking ) {
+            $arrival_raw   = get_post_meta( $booking->ID, '_vrsp_arrival', true );
+            $departure_raw = get_post_meta( $booking->ID, '_vrsp_departure', true );
+
+            $arrival_date = false;
+            if ( is_string( $arrival_raw ) && $arrival_raw !== '' ) {
+                $arrival_date = DateTimeImmutable::createFromFormat( '!Y-m-d', $arrival_raw, $timezone );
+                if ( $arrival_date instanceof DateTimeImmutable ) {
+                    $arrival_date = $arrival_date->setTime( 0, 0 );
+                }
+            }
+
+            $departure_date = false;
+            if ( is_string( $departure_raw ) && $departure_raw !== '' ) {
+                $departure_date = DateTimeImmutable::createFromFormat( '!Y-m-d', $departure_raw, $timezone );
+                if ( $departure_date instanceof DateTimeImmutable ) {
+                    $departure_date = $departure_date->setTime( 0, 0 );
+                }
+            }
+
+            if ( ! $arrival_date instanceof DateTimeImmutable || ! $departure_date instanceof DateTimeImmutable ) {
+                continue;
+            }
 
             $events[] = [
                 'uid'         => $booking->ID . '@' . wp_parse_url( home_url(), PHP_URL_HOST ),
                 'created'     => strtotime( $booking->post_date_gmt ),
                 'changed'     => strtotime( $booking->post_modified_gmt ),
-                'start'       => $arrival,
-                'end'         => $departure,
+                'start'       => $arrival_date->getTimestamp(),
+                'end'         => $departure_date->getTimestamp(),
                 'summary'     => get_the_title( $booking ),
                 'description' => sprintf( 'Guests: %s', get_post_meta( $booking->ID, '_vrsp_guests', true ) ),
                 'source'      => 'direct',
