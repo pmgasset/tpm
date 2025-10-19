@@ -139,6 +139,41 @@ ICS;
     date_default_timezone_set('Pacific/Honolulu');
     $GLOBALS['__wp_timezone'] = 'Europe/Paris';
 
+    $all_day_ical = <<<ICS
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:all-day-1
+DTSTART;VALUE=DATE:20241224
+DTEND;VALUE=DATE:20241227
+SUMMARY:Seasonal Stay
+DESCRIPTION:Imported all day booking
+END:VEVENT
+END:VCALENDAR
+ICS;
+
+    $all_day_events = $method->invoke($sync, $all_day_ical);
+
+    if (count($all_day_events) !== 1) {
+        throw new RuntimeException('Expected a single all-day imported event.');
+    }
+
+    update_option('vrsp_imported_ical_events', $all_day_events);
+
+    $availability_sync = new \VRSP\Integrations\IcalSync(new \VRSP\Settings(), new \VRSP\Utilities\Logger());
+
+    $all_day_window = $availability_sync->get_availability_window(
+        new DateTimeImmutable('2024-12-20 00:00:00', new DateTimeZone('UTC')),
+        new DateTimeImmutable('2024-12-31 00:00:00', new DateTimeZone('UTC'))
+    );
+
+    if (count($all_day_window) !== 1) {
+        throw new RuntimeException('Expected availability window for the imported all-day event.');
+    }
+
+    if ($all_day_window[0]['start'] !== '2024-12-24' || $all_day_window[0]['end'] !== '2024-12-27') {
+        throw new RuntimeException('Imported all-day event should respect the WordPress timezone dates.');
+    }
+
     $booking = (object) [
         'ID'                => 42,
         'post_title'        => 'Channel Booking',
