@@ -2,6 +2,7 @@
 namespace VRSP\Integrations;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use VRSP\Settings;
 use VRSP\Utilities\Logger;
 
@@ -235,6 +236,8 @@ continue;
 
 $event = [];
 $lines = preg_split( "/\r?\n/", $block );
+        $parameters = [];
+
         foreach ( $lines as $line ) {
             if ( empty( $line ) ) {
                 continue;
@@ -242,15 +245,29 @@ $lines = preg_split( "/\r?\n/", $block );
 
             if ( false !== strpos( $line, ':' ) ) {
                 [ $raw_key, $value ] = array_map( 'trim', explode( ':', $line, 2 ) );
-                $key               = $this->normalize_property_name( $raw_key );
-                $event[ $key ]     = $value;
+
+                $key_parts = explode( ';', $raw_key );
+                $key       = $this->normalize_property_name( (string) array_shift( $key_parts ) );
+
+                $event[ $key ] = $value;
+
+                if ( ! empty( $key_parts ) ) {
+                    $parameters[ $key ] = $this->parse_property_parameters( $key_parts );
+                }
             }
         }
 
-        $start = $this->get_event_value( $event, 'DTSTART' );
-        $end   = $this->get_event_value( $event, 'DTEND' );
+        $start_value = $this->get_event_value( $event, 'DTSTART' );
+        $end_value   = $this->get_event_value( $event, 'DTEND' );
 
-        if ( empty( $start ) || empty( $end ) ) {
+        if ( empty( $start_value ) || empty( $end_value ) ) {
+            continue;
+        }
+
+        $start = $this->parse_event_datetime( $start_value, $parameters['DTSTART'] ?? [] );
+        $end   = $this->parse_event_datetime( $end_value, $parameters['DTEND'] ?? [] );
+
+        if ( ! $start instanceof DateTimeImmutable || ! $end instanceof DateTimeImmutable ) {
             continue;
         }
 
@@ -258,14 +275,76 @@ $lines = preg_split( "/\r?\n/", $block );
             'uid'         => $this->get_event_value( $event, 'UID' ) ?? md5( wp_json_encode( $event ) ),
             'created'     => ( $dtstamp = $this->get_event_value( $event, 'DTSTAMP' ) ) ? strtotime( $dtstamp ) : time(),
             'changed'     => ( $modified = $this->get_event_value( $event, 'LAST-MODIFIED' ) ) ? strtotime( $modified ) : time(),
-            'start'       => strtotime( $start ),
-            'end'         => strtotime( $end ),
+            'start'       => $start->getTimestamp(),
+            'end'         => $end->getTimestamp(),
             'summary'     => $this->get_event_value( $event, 'SUMMARY' ) ?? '',
             'description' => $this->get_event_value( $event, 'DESCRIPTION' ) ?? '',
         ];
     }
 
     return $events;
+}
+
+private function parse_property_parameters( array $parts ): array {
+    $parameters = [];
+
+    foreach ( $parts as $part ) {
+        $part = trim( (string) $part );
+
+        if ( '' === $part ) {
+            continue;
+        }
+
+        if ( false !== strpos( $part, '=' ) ) {
+            [ $param_key, $param_value ] = explode( '=', $part, 2 );
+            $parameters[ strtoupper( trim( $param_key ) ) ] = trim( $param_value );
+        } else {
+            $parameters[ strtoupper( $part ) ] = true;
+        }
+    }
+
+    return $parameters;
+}
+
+private function parse_event_datetime( string $value, array $parameters ): ?DateTimeImmutable {
+    $value_type = isset( $parameters['VALUE'] ) ? strtoupper( (string) $parameters['VALUE'] ) : null;
+
+    if ( 'DATE' === $value_type ) {
+        $timezone = wp_timezone();
+        $date     = DateTimeImmutable::createFromFormat( '!Ymd', $value, $timezone );
+
+        if ( ! $date instanceof DateTimeImmutable ) {
+            return null;
+        }
+
+        return $date->setTime( 0, 0 );
+    }
+
+    $timezone = null;
+
+    if ( isset( $parameters['TZID'] ) ) {
+        try {
+            $timezone = new DateTimeZone( (string) $parameters['TZID'] );
+        } catch ( \Exception $exception ) {
+            return null;
+        }
+    }
+
+    if ( 'Z' === substr( $value, -1 ) ) {
+        $format   = '!Ymd\THis\Z';
+        $timezone = new DateTimeZone( 'UTC' );
+    } else {
+        $format   = '!Ymd\THis';
+        $timezone = $timezone ?? wp_timezone();
+    }
+
+    $date = DateTimeImmutable::createFromFormat( $format, $value, $timezone );
+
+    if ( ! $date instanceof DateTimeImmutable ) {
+        return null;
+    }
+
+    return $date;
 }
 
 private function normalize_property_name( string $property ): string {
